@@ -23,7 +23,7 @@ namespace Miraluna.Uvs.Benchmarks.Tests
             }
 
             VersionLabel = string.IsNullOrEmpty(info.version) ? "unknown" : info.version;
-            SourceLabel = string.IsNullOrEmpty(info.source) ? "unknown" : info.source.ToLowerInvariant();
+            SourceLabel = info.source.ToString().ToLowerInvariant();
 #else
             VersionLabel = "player";
             SourceLabel = "player";
