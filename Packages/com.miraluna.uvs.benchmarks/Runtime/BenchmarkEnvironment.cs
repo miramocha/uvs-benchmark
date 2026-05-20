@@ -8,8 +8,6 @@ namespace Miraluna.Uvs.Benchmarks
 
         public static void EnsureInitialized()
         {
-            UvsPackageProbe.Refresh();
-
             Application.targetFrameRate = 60;
             QualitySettings.vSyncCount = 0;
 

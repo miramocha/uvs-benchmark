@@ -1,7 +1,8 @@
-using UnityEngine;
-using UnityEngine.PackageManager;
+#if UNITY_EDITOR
+using UnityEditor.PackageManager;
+#endif
 
-namespace Miraluna.Uvs.Benchmarks
+namespace Miraluna.Uvs.Benchmarks.Tests
 {
     public static class UvsPackageProbe
     {
@@ -12,6 +13,7 @@ namespace Miraluna.Uvs.Benchmarks
 
         public static void Refresh()
         {
+#if UNITY_EDITOR
             var info = PackageInfo.FindForAssetPath($"Packages/{PackageName}");
             if (info == null)
             {
@@ -22,6 +24,10 @@ namespace Miraluna.Uvs.Benchmarks
 
             VersionLabel = string.IsNullOrEmpty(info.version) ? "unknown" : info.version;
             SourceLabel = string.IsNullOrEmpty(info.source) ? "unknown" : info.source.ToLowerInvariant();
+#else
+            VersionLabel = "player";
+            SourceLabel = "player";
+#endif
         }
     }
 }

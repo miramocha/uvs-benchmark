@@ -10,6 +10,9 @@ namespace Miraluna.Uvs.Benchmarks
         public static int WarmupFrames { get; private set; } = DefaultWarmupFrames;
         public static int MeasurementFrames { get; private set; } = DefaultMeasurementFrames;
 
+        public static string VersionLabel { get; private set; } = "unknown";
+        public static string SourceLabel { get; private set; } = "unknown";
+
         public static void Configure(
             BenchmarkAgentKind agentKind,
             int objectCount,
@@ -22,7 +25,13 @@ namespace Miraluna.Uvs.Benchmarks
             MeasurementFrames = measurementFrames;
         }
 
+        public static void SetPackageLabels(string version, string source)
+        {
+            VersionLabel = version;
+            SourceLabel = source;
+        }
+
         public static string SampleGroupPrefix =>
-            $"{AgentKind}_{ObjectCount}_{UvsPackageProbe.SourceLabel}_{UvsPackageProbe.VersionLabel}";
+            $"{AgentKind}_{ObjectCount}_{SourceLabel}_{VersionLabel}";
     }
 }

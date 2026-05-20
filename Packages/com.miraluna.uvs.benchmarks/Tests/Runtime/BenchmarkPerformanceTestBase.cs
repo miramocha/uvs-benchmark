@@ -14,6 +14,7 @@ namespace Miraluna.Uvs.Benchmarks.Tests
         {
             BenchmarkEnvironment.Teardown();
             UvsPackageProbe.Refresh();
+            BenchmarkRunContext.SetPackageLabels(UvsPackageProbe.VersionLabel, UvsPackageProbe.SourceLabel);
         }
 
         [TearDown]
