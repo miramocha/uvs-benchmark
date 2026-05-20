@@ -16,7 +16,8 @@ Each run uses **120 warmup frames** and **300 measurement frames** (`Measure.Fra
 | Run | `com.unity.visualscripting` source | Purpose |
 |-----|-----------------------------------|---------|
 | **A** | Registry `1.9.11` (default manifest) | Baseline / stock UVS |
-| **B** | Enhanced fork Git URL | Compare fork performance |
+| **B** | Git `#stable` from [uvs-community-performance-optimization](https://github.com/miramocha/uvs-community-performance-optimization) | Compare stable community fork |
+| **C** | Git `#enhanced` (optional) | Compare integration branch |
 
 Run **all** Play Mode performance tests in both A and B. Sample group names include agent kind, object count, UVS version, and package source (`registry` vs `git`).
 
@@ -28,11 +29,14 @@ From repo root:
 # Run A (default)
 .\tools\Set-UvsManifestSource.ps1 -Source Registry
 
-# Run B
+# Run B (stable fork — recommended comparison)
+.\tools\Set-UvsManifestSource.ps1 -Source StableGit
+
+# Run C (enhanced branch, optional)
 .\tools\Set-UvsManifestSource.ps1 -Source EnhancedGit
 ```
 
-After each change, open **`Projects/UvsBenchmarkHost`** in Unity and let Package Manager refresh.
+After each change, reopen **`Projects/UvsBenchmarkHost`** in Unity (or use **Window → Package Manager → Resolve**) so packages refresh.
 
 ## Interpreting results
 
