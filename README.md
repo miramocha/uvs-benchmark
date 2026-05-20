@@ -6,7 +6,7 @@ Repository: [https://github.com/miramocha/uvs-benchmark](https://github.com/mira
 
 ## Requirements
 
-- Unity **2021.3** or newer (project targets **`2021.3.45f1`**)
+- Unity **2021.3.45f2** LTS (security-patched; use **`2021.3.45f2`** in Unity Hub, not f1)
 - Unity Registry package **`com.unity.visualscripting` `1.9.11`** (default) or your [enhanced fork](https://github.com/miramocha/unity-visual-scripting-enhancements)
 
 ## Quick start
