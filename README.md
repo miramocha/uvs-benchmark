@@ -19,6 +19,8 @@ Repository: [https://github.com/miramocha/uvs-benchmark](https://github.com/mira
 
 See [docs/benchmarking.md](docs/benchmarking.md) for the Registry vs enhanced comparison matrix.
 
+**Wiki:** [Test methodology](https://github.com/miramocha/uvs-benchmark/wiki/Test-Methodology) · [Test results](https://github.com/miramocha/uvs-benchmark/wiki/Test-Results)
+
 ## Repository layout
 
 ```text
