@@ -4,8 +4,6 @@
     "references": [
         "Miraluna.Uvs.Benchmarks.Runtime",
         "Unity.VisualScripting.Flow",
-        "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner",
         "Unity.PerformanceTesting"
     ],
     "includePlatforms": [],
