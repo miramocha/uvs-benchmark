@@ -2,7 +2,7 @@
   "dependencies": {
     "com.miraluna.uvs.benchmarks": "file:../../../Packages/com.miraluna.uvs.benchmarks",
     "com.unity.visualscripting": "1.9.11",
-    "com.unity.test-framework": "1.4.6",
+    "com.unity.test-framework": "1.1.33",
     "com.unity.test-framework.performance": "3.0.3",
     "com.unity.modules.ai": "1.0.0",
     "com.unity.modules.androidjni": "1.0.0",
@@ -19,6 +19,7 @@
     "com.unity.modules.physics2d": "1.0.0",
     "com.unity.modules.screencapture": "1.0.0",
     "com.unity.modules.terrain": "1.0.0",
+    "com.unity.modules.terrainphysics": "1.0.0",
     "com.unity.modules.tilemap": "1.0.0",
     "com.unity.modules.ui": "1.0.0",
     "com.unity.modules.uielements": "1.0.0",
