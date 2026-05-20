@@ -52,6 +52,6 @@ After each change, open **`Projects/UvsBenchmarkHost`** in Unity and let Package
 
 | Issue | Check |
 |-------|--------|
-| Tests missing in Test Runner | `playModeTestRunnerEnabled` in Project Settings; reimport test asmdef |
+| Tests missing in Test Runner | Host `manifest.json` must include `"testables": ["com.miraluna.uvs.benchmarks"]`; enable Play Mode Test Runner; reimport package |
 | UVS graphs not running | Visual Scripting project settings; ensure `ScriptMachine` + `Variables` on UVS agents |
 | Wrong UVS version | `UvsPackageProbe` labels in sample groups; verify manifest / lock file |

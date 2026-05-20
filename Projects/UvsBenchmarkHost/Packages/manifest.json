@@ -1,4 +1,7 @@
 {
+  "testables": [
+    "com.miraluna.uvs.benchmarks"
+  ],
   "dependencies": {
     "com.miraluna.uvs.benchmarks": "file:../../../Packages/com.miraluna.uvs.benchmarks",
     "com.unity.visualscripting": "1.9.11",
