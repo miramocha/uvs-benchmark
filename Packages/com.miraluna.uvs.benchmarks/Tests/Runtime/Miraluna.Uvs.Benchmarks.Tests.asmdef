@@ -1,0 +1,23 @@
+{
+    "name": "Miraluna.Uvs.Benchmarks.Tests",
+    "rootNamespace": "Miraluna.Uvs.Benchmarks.Tests",
+    "references": [
+        "Miraluna.Uvs.Benchmarks.Runtime",
+        "Unity.VisualScripting.Flow",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Unity.PerformanceTesting"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}
