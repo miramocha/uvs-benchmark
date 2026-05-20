@@ -12,7 +12,7 @@ Repository: [https://github.com/miramocha/uvs-benchmark](https://github.com/mira
 ## Quick start
 
 1. Clone this repo.
-2. Open **`Projects/UvsBenchmarkHost`** in the Unity Editor.
+2. Open **`Projects/UvsBenchmarkHost`** in **Unity 2021.3.45f2** (Unity regenerates `ProjectSettings.asset` on first open if missing).
 3. Wait for Package Manager to resolve dependencies.
 4. Open **Window → General → Test Runner**, select **PlayMode**, enable **Performance** tests.
 5. Run tests (e.g. `UvsCounter_1000`, `CSharpCounter_1000`).
