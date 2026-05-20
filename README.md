@@ -7,7 +7,7 @@ Repository: [https://github.com/miramocha/uvs-benchmark](https://github.com/mira
 ## Requirements
 
 - Unity **2021.3.45f2** LTS (security-patched; use **`2021.3.45f2`** in Unity Hub, not f1)
-- Unity Registry package **`com.unity.visualscripting` `1.9.11`** (default) or your [enhanced fork](https://github.com/miramocha/unity-visual-scripting-enhancements)
+- Unity Registry package **`com.unity.visualscripting` `1.9.11`** (default) or the [UVS community performance optimization](https://github.com/miramocha/uvs-community-performance-optimization) package
 
 ## Quick start
 
@@ -26,13 +26,19 @@ See [docs/benchmarking.md](docs/benchmarking.md) for the Registry vs enhanced co
 ```text
 Packages/com.miraluna.uvs.benchmarks/   UPM package (benchmarks + tests)
 Projects/UvsBenchmarkHost/              Unity host project
-tools/Set-UvsManifestSource.ps1         Switch UVS between Registry and enhanced Git
+tools/Set-UvsManifestSource.ps1         Switch UVS: Registry, StableGit, or EnhancedGit
 docs/benchmarking.md                    Run matrix and interpretation
 ```
 
-## Compare against enhanced Visual Scripting
+## Compare against community UVS fork
 
-Default host manifest uses Registry **`1.9.11`**. To benchmark the enhanced fork:
+Default host manifest uses Registry **`1.9.11`**. To benchmark [uvs-community-performance-optimization](https://github.com/miramocha/uvs-community-performance-optimization):
+
+```powershell
+.\tools\Set-UvsManifestSource.ps1 -Source StableGit
+```
+
+For the experimental `enhanced` branch instead of `stable`:
 
 ```powershell
 .\tools\Set-UvsManifestSource.ps1 -Source EnhancedGit
