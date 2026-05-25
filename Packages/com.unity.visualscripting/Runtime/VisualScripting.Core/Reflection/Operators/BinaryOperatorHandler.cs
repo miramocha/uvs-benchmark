@@ -41,9 +41,9 @@ namespace Unity.VisualScripting
                 return SingleNullHandling();
             }
 
-            if (handlers.ContainsKey(query))
+            if (handlers.TryGetValue(query, out var handler))
             {
-                return handlers[query](leftOperand, rightOperand);
+                return handler(leftOperand, rightOperand);
             }
 
             if (customMethodName != null)

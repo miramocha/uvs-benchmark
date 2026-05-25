@@ -9,5 +9,7 @@ namespace Unity.VisualScripting
     public sealed class Start : MachineEventUnit<EmptyEventArgs>
     {
         protected override string hookName => EventHooks.Start;
+
+        protected override bool UseDebugFlow => true;
     }
 }

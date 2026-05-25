@@ -1346,7 +1346,7 @@ namespace Unity.VisualScripting
                 ushort us when type == ValueType.UShort => ushortValue == us,
                 Vector4 v4 when type == ValueType.Vector4 => vector4Value == v4,
                 Color c when type == ValueType.Color => colorValue == c,
-                _ => type == ValueType.Object && ObjectValue.Equals(obj)
+                _ => type == ValueType.Object && (ObjectValue?.Equals(obj) ?? false)
             };
         }
 

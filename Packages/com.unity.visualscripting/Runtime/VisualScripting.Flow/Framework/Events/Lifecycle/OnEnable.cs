@@ -8,5 +8,7 @@ namespace Unity.VisualScripting
     public sealed class OnEnable : MachineEventUnit<EmptyEventArgs>
     {
         protected override string hookName => EventHooks.OnEnable;
+
+        protected override bool UseDebugFlow => true;
     }
 }

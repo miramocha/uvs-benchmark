@@ -52,6 +52,7 @@ namespace Unity.VisualScripting
 
         protected override bool ShouldTrigger(Flow flow, CustomEventArgs args)
         {
+            flow.useDebugFlow = args.debug;
             return CompareNames(flow, name, args.name);
         }
 
@@ -59,7 +60,16 @@ namespace Unity.VisualScripting
         {
             for (var i = 0; i < argumentCount; i++)
             {
-                flow.SetValue(argumentPorts[i], args.arguments[i]);
+                var argValue = args.arguments[i];
+
+                if (argValue.UsesObjectID)
+                {
+                    flow.SetValue(argumentPorts[i], argValue.ToObject());
+                }
+                else
+                {
+                    flow.SetValue(argumentPorts[i], argValue);
+                }
             }
         }
 
@@ -81,9 +91,9 @@ namespace Unity.VisualScripting
             }
         }
 
-        public static void Trigger(GameObject target, string name, NativeArray<ParameterValue> args)
+        public static void Trigger(GameObject target, string name, NativeArray<ParameterValue> args, bool debug = false)
         {
-            EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, args));
+            EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, args, debug));
         }
     }
 }
