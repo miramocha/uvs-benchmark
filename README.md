@@ -33,6 +33,32 @@ tools/Set-UvsManifestSource.ps1           Switch UVS: Registry, StableGit, Enhan
 docs/benchmarking.md                      Run matrix and interpretation
 ```
 
+## Run benchmarks from CLI
+
+```powershell
+# Registry 1.9.11 (Run A)
+.\tools\Run-UvsPlayModeBenchmarks.ps1 -UvsSource Registry
+
+# Enhanced fork (Run C)
+.\tools\Run-UvsPlayModeBenchmarks.ps1 -UvsSource EnhancedGit
+```
+
+Set `$env:UNITY_EDITOR` to **2021.3.45f2** `Unity.exe` if Hub auto-detect fails. Results go under `TestResults/`.
+
+**Cursor skills** (`.cursor/skills/`):
+
+| Skill | Purpose |
+|-------|---------|
+| `uvs-playmode-tests-registry` | Run tests on Registry **1.9.11** |
+| `uvs-playmode-tests-enhanced` | Run tests on **`#enhanced`** fork |
+| `uvs-playmode-results-report` | Markdown report for one run |
+| `uvs-playmode-results-compare` | Compare Registry vs enhanced |
+
+```powershell
+.\tools\Report-UvsPlayModeResults.ps1 -Source Registry
+.\tools\Compare-UvsPlayModeResults.ps1
+```
+
 ## Compare against the community UVS fork
 
 Default host manifest uses Registry **`1.9.11`**. To benchmark the fork from this repo:

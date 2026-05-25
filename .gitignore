@@ -29,3 +29,6 @@ Thumbs.db
 
 # Performance reports (export locally)
 PerformanceTestResults/
+
+# CLI test runs (Run-UvsPlayModeBenchmarks.ps1)
+TestResults/
