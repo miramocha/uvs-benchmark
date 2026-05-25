@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("Registry", "EnhancedGit", "StableGit")]
+    [ValidateSet("Registry", "EnhancedGit", "StableGit", "LocalEmbedded")]
     [string] $Source
 )
 
@@ -12,9 +12,10 @@ if (-not (Test-Path $manifestPath)) {
 }
 
 $values = @{
-    Registry    = "1.9.11"
-    EnhancedGit = "https://github.com/miramocha/uvs-community-performance-optimization.git#enhanced"
-    StableGit   = "https://github.com/miramocha/uvs-community-performance-optimization.git#stable"
+    Registry      = "1.9.11"
+    EnhancedGit   = "https://github.com/miramocha/uvs-benchmark.git?path=/Packages/com.unity.visualscripting#enhanced"
+    StableGit     = "https://github.com/miramocha/uvs-benchmark.git?path=/Packages/com.unity.visualscripting#stable"
+    LocalEmbedded = "file:../../../Packages/com.unity.visualscripting"
 }
 
 $newValue = $values[$Source]

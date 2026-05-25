@@ -1,0 +1,27 @@
+{
+  "name": "com.unity.visualscripting",
+  "displayName": "Visual Scripting",
+  "version": "1.9.11-enhanced.2",
+  "unity": "2021.3",
+  "description": "Visual scripting is a workflow that uses visual, node-based graphs to design behaviors rather than write lines of C# script.\n\nEnabling artists, designers and programmers alike, visual scripting can be used to design final logic, quickly create prototypes, iterate on gameplay and create custom nodes to help streamline collaboration.\n\nVisual scripting is compatible with third-party APIs, including most packages, assets and custom libraries.",
+  "dependencies": {
+    "com.unity.ugui": "1.0.0",
+    "com.unity.modules.jsonserialize": "1.0.0"
+  },
+  "relatedPackages": {
+    "com.unity.visualscripting.tests": "1.9.11"
+  },
+  "_upm": {
+    "changelog": "### Fixed\n- Issue #9 correctness: SetMember, graph lifecycle listeners, ForEach warnings, Machine.UseCompiledGraph.\n- C# Generator CodeGeneratorValueUtility / Humility value root compile errors.\n- CHANGELOG.enhanced.md.meta for Git UPM installs.\n\n### Changed\n- ParameterValue constructor API (removed Create helpers); repo rename and benchmark docs.\n\nSee CHANGELOG.enhanced.md for full fork release notes (based on Unity 1.9.11)."
+  },
+  "upmCi": {
+    "footprint": "58e994797b8ecae04238fac7a0cabbdf5069796d"
+  },
+  "documentationUrl": "https://docs.unity3d.com/Packages/com.unity.visualscripting@1.9/manual/index.html",
+  "repository": {
+    "url": "https://github.com/miramocha/uvs-benchmark.git",
+    "type": "git",
+    "revision": "9b61e84a25538162670094a0063678c2994915a7"
+  },
+  "_fingerprint": "8bed5ad901895f10b7d0e524c4738cab14cef692"
+}

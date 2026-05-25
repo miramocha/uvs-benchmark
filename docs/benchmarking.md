@@ -16,7 +16,7 @@ Each run uses **120 warmup frames** and **300 measurement frames** (`Measure.Fra
 | Run | `com.unity.visualscripting` source | Purpose |
 |-----|-----------------------------------|---------|
 | **A** | Registry `1.9.11` (default manifest) | Baseline / stock UVS |
-| **B** | Git `#stable` from [uvs-community-performance-optimization](https://github.com/miramocha/uvs-community-performance-optimization) | Compare stable community fork |
+| **B** | Git `#stable` from [uvs-benchmark](https://github.com/miramocha/uvs-benchmark) (`?path=/Packages/com.unity.visualscripting`) | Compare stable community fork |
 | **C** | Git `#enhanced` (optional) | Compare integration branch |
 
 Run **all** Play Mode performance tests in both A and B. Sample group names include agent kind, object count, UVS version, and package source (`registry` vs `git`).
@@ -34,6 +34,9 @@ From repo root:
 
 # Run C (enhanced branch, optional)
 .\tools\Set-UvsManifestSource.ps1 -Source EnhancedGit
+
+# Local embedded package (this clone, no Git fetch)
+.\tools\Set-UvsManifestSource.ps1 -Source LocalEmbedded
 ```
 
 After each change, reopen **`Projects/UvsBenchmarkHost`** in Unity (or use **Window → Package Manager → Resolve**) so packages refresh.
@@ -59,3 +62,4 @@ After each change, reopen **`Projects/UvsBenchmarkHost`** in Unity (or use **Win
 | Tests missing in Test Runner | Host `manifest.json` must include `"testables": ["com.miraluna.uvs.benchmarks"]`; enable Play Mode Test Runner; reimport package |
 | UVS graphs not running | Visual Scripting project settings; ensure `ScriptMachine` + `Variables` on UVS agents |
 | Wrong UVS version | `UvsPackageProbe` labels in sample groups; verify manifest / lock file |
+| Git UPM checkout failed | URL must include `?path=/Packages/com.unity.visualscripting` |

@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "com.miraluna.uvs.benchmarks": "file:../../../Packages/com.miraluna.uvs.benchmarks",
-    "com.unity.visualscripting": "https://github.com/miramocha/uvs-community-performance-optimization.git#stable",
+    "com.unity.visualscripting": "https://github.com/miramocha/uvs-benchmark.git?path=/Packages/com.unity.visualscripting#stable",
     "com.unity.test-framework": "1.1.33",
     "com.unity.test-framework.performance": "3.0.3"
   }
