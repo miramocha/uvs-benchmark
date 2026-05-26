@@ -32,3 +32,11 @@ PerformanceTestResults/
 
 # CLI test runs (Run-UvsPlayModeBenchmarks.ps1)
 TestResults/
+
+# Unity Test Runner bootstrap scenes (created each Play Mode test run)
+**/InitTestScene*.unity
+**/InitTestScene*.unity.meta
+
+# UVS community C# preview / generator output (editor-local)
+**/Unity.VisualScripting.Community.Generated/
+**/Unity.VisualScripting.Community.Generated.meta
