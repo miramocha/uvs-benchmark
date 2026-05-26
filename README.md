@@ -89,13 +89,49 @@ Restore Registry baseline:
 
 ## Install in another Unity project
 
+Use **Package Manager** (paste a Git URL) or edit **`Packages/manifest.json`** directly—both add the same dependency.
+
+### Package Manager (Git URL)
+
+In Unity: **Window → Package Manager → + → Add package from Git URL…**, paste a URL below, then **Add**. Unity writes the dependency to **`Packages/manifest.json`** (same result as editing the file by hand).
+
+If **`com.unity.visualscripting`** is already installed from the Registry, remove or replace that entry first—UPM allows only one source per package id.
+
+**Benchmarks only (MIT):**
+
+```text
+https://github.com/miramocha/uvs-benchmark.git?path=/Packages/com.miraluna.uvs.benchmarks
+```
+
+**Visual Scripting fork (UPML — see [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)):**
+
+Stable line:
+
+```text
+https://github.com/miramocha/uvs-benchmark.git?path=/Packages/com.unity.visualscripting#stable
+```
+
+Integration branch (`enhanced`):
+
+```text
+https://github.com/miramocha/uvs-benchmark.git?path=/Packages/com.unity.visualscripting#enhanced
+```
+
+Pinned release tag:
+
+```text
+https://github.com/miramocha/uvs-benchmark.git?path=/Packages/com.unity.visualscripting#1.9.11-enhanced.2
+```
+
+### `manifest.json`
+
 **Benchmarks only (MIT):**
 
 ```json
 "com.miraluna.uvs.benchmarks": "https://github.com/miramocha/uvs-benchmark.git?path=/Packages/com.miraluna.uvs.benchmarks"
 ```
 
-**Visual Scripting fork (UPML — see [LICENSE-THIRD-PARTY.md](LICENSE-THIRD-PARTY.md)):**
+**Visual Scripting fork:**
 
 ```json
 "com.unity.visualscripting": "https://github.com/miramocha/uvs-benchmark.git?path=/Packages/com.unity.visualscripting#stable"
