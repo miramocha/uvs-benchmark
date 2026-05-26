@@ -84,6 +84,6 @@ Lead with **UvsCounter** and **UvsOverhead** at **N=1000** and **5000**.
 |-------|--------|
 | No baseline XML | Run Registry tests first |
 | No candidate XML | Run enhanced tests first |
-| Missing median values | Inspect XML test `output`; re-run tests in Unity 2021.3.45f2 |
+| Missing median values | Inspect XML test `output`; re-run tests in Unity 6000.4 |
 
 See [docs/benchmarking.md](../../../docs/benchmarking.md).

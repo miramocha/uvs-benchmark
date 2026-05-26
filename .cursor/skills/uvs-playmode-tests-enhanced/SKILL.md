@@ -27,14 +27,14 @@ Do not require checking out git branch **`enhanced`** unless the user explicitly
 
 1. Ensures `Projects/UvsBenchmarkHost/Packages/manifest.json` has a `com.unity.visualscripting` entry.
 2. Calls `Set-UvsManifestSource.ps1 -Source EnhancedGit`.
-3. Runs Unity **2021.3.45f2** batch Play Mode tests in `Miraluna.Uvs.Benchmarks.Tests`.
+3. Runs Unity **6000.4.0f1** batch Play Mode tests in `Miraluna.Uvs.Benchmarks.Tests`.
 
 First run may be slow while UPM clones the fork from GitHub.
 
 ## Unity Editor path
 
-- Prefer `$env:UNITY_EDITOR` → `Unity.exe` (**2021.3.45f2**).
-- Otherwise Unity Hub `2021.3.45f2*` is auto-detected.
+- Prefer `$env:UNITY_EDITOR` → `Unity.exe` (**6000.4.0f1**).
+- Otherwise Unity Hub `6000.4*` is auto-detected.
 
 ## Local embedded fork (optional)
 
@@ -95,6 +95,6 @@ For promoted fork (**Run B**), use:
 |-------|--------|
 | Git UPM failed | Manifest URL must include `?path=/Packages/com.unity.visualscripting#enhanced` |
 | Wrong package | Re-run script; delete `Library/PackageCache` if stale |
-| Unity not found | Set `UNITY_EDITOR` for 2021.3.45f2 |
+| Unity not found | Set `UNITY_EDITOR` for 6000.4.0f1 |
 
 See [docs/benchmarking.md](../../../docs/benchmarking.md).

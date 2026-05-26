@@ -67,7 +67,7 @@ function Resolve-UnityEditorPath {
         }
 
         $match = Get-ChildItem $hub -Directory |
-            Where-Object { $_.Name -like "2021.3.45f2*" } |
+            Where-Object { $_.Name -like "6000.4*" } |
             Sort-Object Name -Descending |
             Select-Object -First 1
 
@@ -80,9 +80,9 @@ function Resolve-UnityEditorPath {
     }
 
     throw @"
-Unity Editor not found. Set UNITY_EDITOR to Unity.exe (2021.3.45f2), or install that version via Unity Hub.
+Unity Editor not found. Set UNITY_EDITOR to Unity.exe (6000.4.x), or install Unity 6000.4 via Unity Hub.
 Example:
-  `$env:UNITY_EDITOR = 'C:\Program Files\Unity\Hub\Editor\2021.3.45f2\Editor\Unity.exe'
+  `$env:UNITY_EDITOR = 'C:\Program Files\Unity\Hub\Editor\6000.4.0f1\Editor\Unity.exe'
 "@
 }
 
