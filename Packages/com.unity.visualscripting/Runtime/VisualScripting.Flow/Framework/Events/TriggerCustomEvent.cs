@@ -98,7 +98,7 @@ namespace Unity.VisualScripting
                     values[i] = flow.GetValueData(arguments[i]);
                 }
 
-                CustomEvent.Trigger(target, name, values);
+                CustomEvent.Trigger(target, name, values, flow.useDebugFlow);
             }
             finally
             {

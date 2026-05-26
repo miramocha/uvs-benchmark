@@ -6,6 +6,7 @@
 |-------------|---------|--------|
 | **Overhead** | `On Update` only (flow dispatch) | Empty `Update()` |
 | **Counter** | On Update → get/add/set object variable `counter` | `value++` in `Update()` |
+| **Rotate** | On Update → `Random.Range(0, 222)` → `Vector3` → `Transform.Rotate` on This | Same logic in `Update()` (`RotateBehaviour`) |
 
 Object counts: **100**, **1000**, **5000** agents (one `ScriptMachine` or one `MonoBehaviour` per GameObject).
 

@@ -4,7 +4,9 @@ namespace Miraluna.Uvs.Benchmarks
     {
         UvsOverhead,
         UvsCounter,
+        UvsRotate,
         CSharpOverhead,
         CSharpCounter,
+        CSharpRotate,
     }
 }

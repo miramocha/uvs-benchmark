@@ -216,6 +216,8 @@ namespace Unity.VisualScripting
 
         public bool isPrediction { get; private set; }
 
+        public bool useDebugFlow;
+
         private bool disposed;
 #if UNITY_EDITOR
         private int stackDepth;
@@ -227,6 +229,11 @@ namespace Unity.VisualScripting
 #if !UNITY_EDITOR
                 return false;
 #else
+                if (useDebugFlow)
+                {
+                    return true;
+                }
+
                 if (stackDepth != stack.depth)
                 {
                     stackDepth = stack.depth;

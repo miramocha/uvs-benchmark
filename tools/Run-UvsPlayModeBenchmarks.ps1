@@ -16,6 +16,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Set-Utf8FileNoBom {
+    param(
+        [Parameter(Mandatory)][string] $Path,
+        [Parameter(Mandatory)][string] $Value
+    )
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($Path, $Value, $utf8)
+}
+
 function Ensure-VisualScriptingManifestEntry {
     param([string] $ManifestPath)
 
@@ -36,7 +45,7 @@ function Ensure-VisualScriptingManifestEntry {
         throw "Could not insert com.unity.visualscripting into manifest.json"
     }
 
-    Set-Content $ManifestPath $updated -Encoding UTF8 -NoNewline
+    Set-Utf8FileNoBom -Path $ManifestPath -Value $updated
     Write-Host "Added com.unity.visualscripting placeholder (1.9.11) to manifest.json"
 }
 
@@ -121,7 +130,7 @@ Write-Host "Results: $resultsFile"
 & $unityExe @unityArgs
 $exitCode = $LASTEXITCODE
 
-if ($exitCode -ne 0) {
+if ($null -ne $exitCode -and $exitCode -ne 0) {
     Write-Error "Unity test run failed with exit code $exitCode. See log: $logFile"
 }
 
