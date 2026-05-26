@@ -23,6 +23,8 @@ See [docs/benchmarking.md](docs/benchmarking.md) for the Registry vs fork compar
 
 **Wiki:** [Test methodology](https://github.com/miramocha/uvs-benchmark/wiki/Test-Methodology) · [Test results](https://github.com/miramocha/uvs-benchmark/wiki/Test-Results)
 
+**Community docs:** [team-maintained Google Doc](https://docs.google.com/document/d/1AMe1LhX3lZtf_6nBjdgwgtvx4f5eTaLHRw8l2ST6pwU) (broader UVS community notes; maintained separately from this repo)
+
 ## Repository layout
 
 ```text
