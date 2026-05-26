@@ -1,9 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using Unity.VisualScripting;
 using Unity.VisualScripting.Community.Libraries.Humility;
 using UnityEngine;
-using Unity.VisualScripting.Community;
 using System.IO;
 using SMachine = Unity.VisualScripting.ScriptMachine;
 
@@ -291,7 +289,7 @@ namespace Unity.VisualScripting.Community
             }
         }
 #endif
-        // ... rest of the file remains unchanged ...
+
         private static Object EnsureCurrentAsset(Object shouldBe = null)
         {
 #if UNITY_EDITOR

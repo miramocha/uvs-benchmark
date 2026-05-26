@@ -70,12 +70,23 @@ namespace Miraluna.Uvs.Benchmarks
                     counter.graphKind = BenchmarkGraphKind.Counter;
                     break;
 
+                case BenchmarkAgentKind.UvsRotate:
+                    go.AddComponent<Variables>();
+                    go.AddComponent<ScriptMachine>();
+                    var rotate = go.AddComponent<BenchmarkUvsAgent>();
+                    rotate.graphKind = BenchmarkGraphKind.Rotate;
+                    break;
+
                 case BenchmarkAgentKind.CSharpOverhead:
                     go.AddComponent<EmptyUpdateBehaviour>();
                     break;
 
                 case BenchmarkAgentKind.CSharpCounter:
                     go.AddComponent<CounterBehaviour>();
+                    break;
+
+                case BenchmarkAgentKind.CSharpRotate:
+                    go.AddComponent<RotateBehaviour>();
                     break;
             }
 

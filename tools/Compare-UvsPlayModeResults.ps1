@@ -13,10 +13,10 @@ param(
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "UvsPlayModeResults.Parser.ps1")
 
-$ResultsDir = (Resolve-Path $ResultsDir -ErrorAction SilentlyContinue).Path
-if (-not $ResultsDir) {
-    throw "Results directory not found: $ResultsDir. Run benchmark CLI first."
+if (-not (Test-Path $ResultsDir)) {
+    New-Item -ItemType Directory -Path $ResultsDir -Force | Out-Null
 }
+$ResultsDir = (Resolve-Path $ResultsDir).Path
 
 function Resolve-LatestResultsXml {
     param([string] $Dir, [string] $Source)

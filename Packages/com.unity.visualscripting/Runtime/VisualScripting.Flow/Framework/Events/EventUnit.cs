@@ -38,6 +38,14 @@ namespace Unity.VisualScripting
 
         [DoNotSerialize]
         protected abstract bool register { get; }
+        
+        /// <summary>
+        /// Force debug flow to show values, only use if a flow runs once like a OnStart Unit because a debug flow is alot slower.
+        /// This is required because alot of the time if you don't have the graph open the flow will run in a non-debug mode,
+        /// causing the values for this flow to not display on the value connections even after the graph is opened. This is a workaround for that issue.
+        /// This is ignored in a build, where debug flow is always disabled.
+        /// </summary>
+        protected virtual bool UseDebugFlow => false;
 
         protected override void Definition()
         {
@@ -150,6 +158,8 @@ namespace Unity.VisualScripting
         private protected virtual void InternalTrigger(GraphReference reference, TArgs args)
         {
             var flow = Flow.New(reference);
+
+            flow.useDebugFlow = UseDebugFlow;
 
             if (!ShouldTrigger(flow, args))
             {
