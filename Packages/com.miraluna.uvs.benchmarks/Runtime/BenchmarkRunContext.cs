@@ -8,6 +8,11 @@ namespace Miraluna.Uvs.Benchmarks
         /// <summary>Unity Profiler marker sampled with frame time (reported as nanoseconds per frame).</summary>
         public const string GcAllocProfilerMarker = "GC.Alloc";
 
+        /// <summary>Profiler memory counter: managed allocation events per frame.</summary>
+        public const string GcAllocationInFrameCountCounter = "GC Allocation In Frame Count";
+
+        public static string GcAllocCountSampleGroup => $"{SampleGroupPrefix}_GCAllocCount";
+
         public static BenchmarkAgentKind AgentKind { get; private set; }
         public static int ObjectCount { get; private set; } = 100;
         public static int WarmupFrames { get; private set; } = DefaultWarmupFrames;

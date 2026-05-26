@@ -127,8 +127,8 @@ Write-Host "Project: $ProjectPath"
 Write-Host "UVS source: $UvsSource"
 Write-Host "Results: $resultsFile"
 
-& $unityExe @unityArgs
-$exitCode = $LASTEXITCODE
+$process = Start-Process -FilePath $unityExe -ArgumentList $unityArgs -Wait -PassThru
+$exitCode = $process.ExitCode
 
 if ($null -ne $exitCode -and $exitCode -ne 0) {
     Write-Error "Unity test run failed with exit code $exitCode. See log: $logFile"

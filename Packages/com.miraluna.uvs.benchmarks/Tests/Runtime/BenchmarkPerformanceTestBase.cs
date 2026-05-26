@@ -41,6 +41,10 @@ namespace Miraluna.Uvs.Benchmarks.Tests
                 .ProfilerMarkers(BenchmarkRunContext.GcAllocProfilerMarker)
                 .Run();
 
+            yield return BenchmarkGcAllocCountMeasurement.Run(
+                BenchmarkRunContext.GcAllocCountSampleGroup
+            );
+
             BenchmarkEnvironment.Teardown();
         }
     }
