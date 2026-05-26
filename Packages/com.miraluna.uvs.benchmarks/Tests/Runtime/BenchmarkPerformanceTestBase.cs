@@ -38,6 +38,7 @@ namespace Miraluna.Uvs.Benchmarks.Tests
                 .SampleGroup(sampleGroup)
                 .WarmupCount(BenchmarkRunContext.WarmupFrames)
                 .MeasurementCount(BenchmarkRunContext.MeasurementFrames)
+                .ProfilerMarkers(BenchmarkRunContext.GcAllocProfilerMarker)
                 .Run();
 
             BenchmarkEnvironment.Teardown();
