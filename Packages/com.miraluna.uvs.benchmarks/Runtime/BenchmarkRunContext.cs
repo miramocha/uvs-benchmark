@@ -5,6 +5,9 @@ namespace Miraluna.Uvs.Benchmarks
         public const int DefaultWarmupFrames = 120;
         public const int DefaultMeasurementFrames = 300;
 
+        /// <summary>Unity Profiler marker sampled with frame time (reported as nanoseconds per frame).</summary>
+        public const string GcAllocProfilerMarker = "GC.Alloc";
+
         public static BenchmarkAgentKind AgentKind { get; private set; }
         public static int ObjectCount { get; private set; } = 100;
         public static int WarmupFrames { get; private set; } = DefaultWarmupFrames;
