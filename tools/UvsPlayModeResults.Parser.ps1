@@ -32,21 +32,22 @@ function Parse-UvsPlayModeResultsXml {
 
     foreach ($case in $testCases) {
         $name = [string]$case.name
-        if ($name -notmatch '^(UvsOverhead|UvsCounter|CSharpOverhead|CSharpCounter)_(\d+)$') {
+        if ($name -notmatch '^(UvsOverhead|UvsCounter|UvsRotate|CSharpOverhead|CSharpCounter|CSharpRotate)_(\d+)$') {
             continue
         }
 
         $agentKind = $Matches[1]
         $objectCount = [int]$Matches[2]
         $output = ""
-        if ($case.output) {
-            $output = [string]$case.output
+        $outputNode = $case.SelectSingleNode("output")
+        if ($null -ne $outputNode) {
+            $output = [string]$outputNode.InnerText
         }
 
         $sampleGroup = $null
         $version = $null
         $source = $null
-        if ($output -match '(UvsOverhead|UvsCounter|CSharpOverhead|CSharpCounter)_(\d+)_([A-Za-z]+)_(\S+)') {
+        if ($output -match '(UvsOverhead|UvsCounter|UvsRotate|CSharpOverhead|CSharpCounter|CSharpRotate)_(\d+)_([A-Za-z]+)_(\S+)') {
             $sampleGroup = $Matches[0]
             $source = $Matches[3]
             $version = $Matches[4]
@@ -125,10 +126,10 @@ function Format-UvsPlayModeReportMarkdown {
     [void]$sb.AppendLine("|------|---|-------------|----------|-----|-----|--------|")
 
     foreach ($t in ($Run.Tests | Sort-Object AgentKind, ObjectCount)) {
-        $median = if ($null -ne $t.MedianMs) { "{0:N2}" -f $t.MedianMs } else { "—" }
-        $avg = if ($null -ne $t.AvgMs) { "{0:N2}" -f $t.AvgMs } else { "—" }
-        $min = if ($null -ne $t.MinMs) { "{0:N2}" -f $t.MinMs } else { "—" }
-        $max = if ($null -ne $t.MaxMs) { "{0:N2}" -f $t.MaxMs } else { "—" }
+        $median = if ($null -ne $t.MedianMs) { '{0:N2}' -f $t.MedianMs } else { 'n/a' }
+        $avg = if ($null -ne $t.AvgMs) { '{0:N2}' -f $t.AvgMs } else { 'n/a' }
+        $min = if ($null -ne $t.MinMs) { '{0:N2}' -f $t.MinMs } else { 'n/a' }
+        $max = if ($null -ne $t.MaxMs) { '{0:N2}' -f $t.MaxMs } else { 'n/a' }
         [void]$sb.AppendLine("| $($t.TestName) | $($t.ObjectCount) | $median | $avg | $min | $max | $($t.Result) |")
     }
 
@@ -150,7 +151,7 @@ function Format-UvsPlayModeReportMarkdown {
                 continue
             }
             $ratio = $uvs.MedianMs / $cs.MedianMs
-            [void]$sb.AppendLine("| $($pair.Uvs) | $n | $("{0:N2}" -f $uvs.MedianMs) | $("{0:N2}" -f $cs.MedianMs) | $("{0:N2}" -f $ratio)x |")
+            [void]$sb.AppendLine(('| {0} | {1} | {2:N2} | {3:N2} | {4:N2}x |' -f $pair.Uvs, $n, $uvs.MedianMs, $cs.MedianMs, $ratio))
         }
     }
 
@@ -179,10 +180,10 @@ function Format-UvsPlayModeCompareMarkdown {
     [void]$sb.AppendLine()
     [void]$sb.AppendLine("## UVS tests (median ms)")
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine("| Test | N | Baseline | Candidate | Δ ms | Δ % |")
-    [void]$sb.AppendLine("|------|---|----------|-----------|------|-----|")
+    [void]$sb.AppendLine('| Test | N | Baseline | Candidate | Delta ms | Delta % |')
+    [void]$sb.AppendLine('|------|---|----------|-----------|----------|---------|')
 
-    $uvsKinds = @("UvsOverhead", "UvsCounter")
+    $uvsKinds = @("UvsOverhead", "UvsCounter", "UvsRotate")
     foreach ($kind in $uvsKinds) {
         $baseTests = $Baseline.Tests | Where-Object { $_.AgentKind -eq $kind }
         foreach ($bt in ($baseTests | Sort-Object ObjectCount)) {
@@ -196,17 +197,17 @@ function Format-UvsPlayModeCompareMarkdown {
 
             $delta = $ct.MedianMs - $bt.MedianMs
             $deltaPct = if ($bt.MedianMs -ne 0) { ($delta / $bt.MedianMs) * 100.0 } else { 0 }
-            [void]$sb.AppendLine("| $kind | $($bt.ObjectCount) | $("{0:N2}" -f $bt.MedianMs) | $("{0:N2}" -f $ct.MedianMs) | $("{0:N2}" -f $delta) | $("{0:N1}" -f $deltaPct)% |")
+            [void]$sb.AppendLine(('| {0} | {1} | {2:N2} | {3:N2} | {4:N2} | {5:N1}% |' -f $kind, $bt.ObjectCount, $bt.MedianMs, $ct.MedianMs, $delta, $deltaPct))
         }
     }
 
     [void]$sb.AppendLine()
     [void]$sb.AppendLine("## C# sanity check (should stay similar)")
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine("| Test | N | Baseline | Candidate | Δ % |")
-    [void]$sb.AppendLine("|------|---|----------|-----------|-----|")
+    [void]$sb.AppendLine('| Test | N | Baseline | Candidate | Delta % |')
+    [void]$sb.AppendLine('|------|---|----------|-----------|---------|')
 
-    $csKinds = @("CSharpOverhead", "CSharpCounter")
+    $csKinds = @("CSharpOverhead", "CSharpCounter", "CSharpRotate")
     foreach ($kind in $csKinds) {
         $baseTests = $Baseline.Tests | Where-Object { $_.AgentKind -eq $kind }
         foreach ($bt in ($baseTests | Sort-Object ObjectCount)) {
@@ -219,21 +220,22 @@ function Format-UvsPlayModeCompareMarkdown {
             }
 
             $deltaPct = (($ct.MedianMs - $bt.MedianMs) / $bt.MedianMs) * 100.0
-            [void]$sb.AppendLine("| $kind | $($bt.ObjectCount) | $("{0:N2}" -f $bt.MedianMs) | $("{0:N2}" -f $ct.MedianMs) | $("{0:N1}" -f $deltaPct)% |")
+            [void]$sb.AppendLine(('| {0} | {1} | {2:N2} | {3:N2} | {4:N1}% |' -f $kind, $bt.ObjectCount, $bt.MedianMs, $ct.MedianMs, $deltaPct))
         }
     }
 
     [void]$sb.AppendLine()
     [void]$sb.AppendLine("## UVS/C# ratio change (median)")
     [void]$sb.AppendLine()
-    [void]$sb.AppendLine("| Workload | N | Baseline ratio | Candidate ratio | Δ ratio |")
-    [void]$sb.AppendLine("|----------|---|----------------|-----------------|---------|")
+    [void]$sb.AppendLine('| Workload | N | Baseline ratio | Candidate ratio | Delta ratio |')
+    [void]$sb.AppendLine('|----------|---|----------------|-----------------|-------------|')
 
     $counts = $Baseline.Tests.ObjectCount | Sort-Object -Unique
     foreach ($n in $counts) {
         foreach ($pair in @(
                 @{ Uvs = "UvsOverhead"; CSharp = "CSharpOverhead" },
-                @{ Uvs = "UvsCounter"; CSharp = "CSharpCounter" }
+                @{ Uvs = "UvsCounter"; CSharp = "CSharpCounter" },
+                @{ Uvs = "UvsRotate"; CSharp = "CSharpRotate" }
             )) {
             $bUvs = $Baseline.Tests | Where-Object { $_.AgentKind -eq $pair.Uvs -and $_.ObjectCount -eq $n } | Select-Object -First 1
             $bCs = $Baseline.Tests | Where-Object { $_.AgentKind -eq $pair.CSharp -and $_.ObjectCount -eq $n } | Select-Object -First 1
@@ -247,7 +249,7 @@ function Format-UvsPlayModeCompareMarkdown {
             $bRatio = $bUvs.MedianMs / $bCs.MedianMs
             $cRatio = $cUvs.MedianMs / $cCs.MedianMs
             $ratioDelta = $cRatio - $bRatio
-            [void]$sb.AppendLine("| $($pair.Uvs) | $n | $("{0:N2}" -f $bRatio)x | $("{0:N2}" -f $cRatio)x | $("{0:N2}" -f $ratioDelta)x |")
+            [void]$sb.AppendLine(('| {0} | {1} | {2:N2}x | {3:N2}x | {4:N2}x |' -f $pair.Uvs, $n, $bRatio, $cRatio, $ratioDelta))
         }
     }
 

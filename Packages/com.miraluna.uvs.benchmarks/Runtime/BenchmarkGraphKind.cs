@@ -4,5 +4,6 @@ namespace Miraluna.Uvs.Benchmarks
     {
         Overhead,
         Counter,
+        Rotate,
     }
 }

@@ -6,6 +6,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Set-Utf8FileNoBom {
+    param(
+        [Parameter(Mandatory)][string] $Path,
+        [Parameter(Mandatory)][string] $Value
+    )
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    [System.IO.File]::WriteAllText($Path, $Value, $utf8)
+}
+
 $manifestPath = Join-Path $PSScriptRoot "..\Projects\UvsBenchmarkHost\Packages\manifest.json"
 if (-not (Test-Path $manifestPath)) {
     throw "Manifest not found: $manifestPath"
@@ -29,7 +38,7 @@ if (-not [regex]::IsMatch($manifestText, $pattern)) {
 $replacement = '"com.unity.visualscripting": "' + $newValue + '"'
 $updated = [regex]::Replace($manifestText, $pattern, $replacement, 1)
 
-Set-Content $manifestPath $updated -Encoding UTF8 -NoNewline
+Set-Utf8FileNoBom -Path $manifestPath -Value $updated
 
 Write-Host "Set com.unity.visualscripting to ${Source}:"
 Write-Host "  $newValue"
