@@ -6,7 +6,7 @@
       "source": "local",
       "dependencies": {
         "com.unity.visualscripting": "1.9.11",
-        "com.unity.test-framework": "1.1.33",
+        "com.unity.test-framework": "1.6.0",
         "com.unity.test-framework.performance": "3.0.3"
       }
     },
@@ -38,7 +38,7 @@
     },
     "com.unity.ugui": {
       "version": "2.0.0",
-      "depth": 2,
+      "depth": 1,
       "source": "builtin",
       "dependencies": {
         "com.unity.modules.ui": "1.0.0",
@@ -47,7 +47,7 @@
     },
     "com.unity.visualscripting": {
       "version": "1.9.11",
-      "depth": 1,
+      "depth": 0,
       "source": "registry",
       "dependencies": {
         "com.unity.ugui": "1.0.0",
