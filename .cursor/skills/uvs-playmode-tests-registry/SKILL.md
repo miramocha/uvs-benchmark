@@ -26,12 +26,12 @@ Do not skip package switching. Do not ask the user to switch git branches.
 
 1. Ensures `Projects/UvsBenchmarkHost/Packages/manifest.json` has a `com.unity.visualscripting` entry (adds `1.9.11` if missing).
 2. Calls `Set-UvsManifestSource.ps1 -Source Registry`.
-3. Runs Unity **2021.3.45f2** in batch mode: Play Mode tests in assembly `Miraluna.Uvs.Benchmarks.Tests`.
+3. Runs Unity **6000.4.0f1** in batch mode: Play Mode tests in assembly `Miraluna.Uvs.Benchmarks.Tests`.
 
 ## Unity Editor path
 
-- Prefer `$env:UNITY_EDITOR` pointing at `Unity.exe` (**2021.3.45f2**).
-- Otherwise the script searches Unity Hub for `2021.3.45f2*`.
+- Prefer `$env:UNITY_EDITOR` pointing at `Unity.exe` (**6000.4.0f1**).
+- Otherwise the script searches Unity Hub for `6000.4*`.
 
 If resolution fails, set `UNITY_EDITOR` and re-run.
 
@@ -39,7 +39,7 @@ If resolution fails, set `UNITY_EDITOR` and re-run.
 
 ```powershell
 .\tools\Run-UvsPlayModeBenchmarks.ps1 -UvsSource Registry -TestFilter "UvsCounter"
-.\tools\Run-UvsPlayModeBenchmarks.ps1 -UvsSource Registry -UnityPath "C:\Program Files\Unity\Hub\Editor\2021.3.45f2\Editor\Unity.exe"
+.\tools\Run-UvsPlayModeBenchmarks.ps1 -UvsSource Registry -UnityPath "C:\Program Files\Unity\Hub\Editor\6000.4.0f1\Editor\Unity.exe"
 ```
 
 ## Outputs
@@ -80,7 +80,7 @@ After this run, use skill **`uvs-playmode-tests-enhanced`**, then **`uvs-playmod
 | Issue | Action |
 |-------|--------|
 | Manifest script error | Ensure host project path is `Projects/UvsBenchmarkHost` |
-| Unity not found | Set `UNITY_EDITOR` to 2021.3.45f2 `Unity.exe` |
+| Unity not found | Set `UNITY_EDITOR` to 6000.4.0f1 `Unity.exe` |
 | Tests missing | Confirm `testables` includes `com.miraluna.uvs.benchmarks` in host manifest |
 | Long first run | UPM resolve/import; wait for batch mode to finish |
 
