@@ -1,9 +1,10 @@
+using System;
 using System.Collections.Generic;
 
 namespace Unity.VisualScripting
 {
     [TypeIcon(typeof(ISelectUnit))]
-    public abstract class SelectUnit<T> : Unit, ISelectUnit
+    public abstract class SelectUnit<T> : Unit, ISelectUnit where T : IEquatable<T>
     {
         // Using L<KVP> instead of Dictionary to allow null key
         [DoNotSerialize]
@@ -63,7 +64,7 @@ namespace Unity.VisualScripting
 
         protected virtual bool Matches(T a, T b)
         {
-            return Equals(a, b);
+            return a.Equals(b);
         }
 
         public object Result(Flow flow)

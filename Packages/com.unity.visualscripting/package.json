@@ -1,7 +1,7 @@
 {
   "name": "com.unity.visualscripting",
   "displayName": "Visual Scripting",
-  "version": "1.9.11-enhanced.2",
+  "version": "1.9.11-enhanced.3",
   "unity": "2021.3",
   "description": "Visual scripting is a workflow that uses visual, node-based graphs to design behaviors rather than write lines of C# script.\n\nEnabling artists, designers and programmers alike, visual scripting can be used to design final logic, quickly create prototypes, iterate on gameplay and create custom nodes to help streamline collaboration.\n\nVisual scripting is compatible with third-party APIs, including most packages, assets and custom libraries.",
   "dependencies": {
@@ -12,7 +12,7 @@
     "com.unity.visualscripting.tests": "1.9.11"
   },
   "_upm": {
-    "changelog": "### Fixed\n- Issue #9 correctness: SetMember, graph lifecycle listeners, ForEach warnings, Machine.UseCompiledGraph.\n- C# Generator CodeGeneratorValueUtility / Humility value root compile errors.\n- CHANGELOG.enhanced.md.meta for Git UPM installs.\n\n### Changed\n- ParameterValue constructor API (removed Create helpers); repo rename and benchmark docs.\n\nSee CHANGELOG.enhanced.md for full fork release notes (based on Unity 1.9.11)."
+    "changelog": "### Added\n- Optimized constructor invokers (0–5 arity) and reflection fallback.\n- Flow debugging for On Start and On Enable.\n\n### Changed\n- Flow, custom events, and reflection invoker hot paths; Unsafe plugin under VisualScripting.Core.\n\n### Fixed\n- Custom events and CodeGeneratorValueUtility.\n\nSee CHANGELOG.enhanced.md for full fork release notes (based on Unity 1.9.11)."
   },
   "upmCi": {
     "footprint": "58e994797b8ecae04238fac7a0cabbdf5069796d"
@@ -21,7 +21,7 @@
   "repository": {
     "url": "https://github.com/miramocha/uvs-benchmark.git",
     "type": "git",
-    "revision": "a3f623826d280e0168e345db4e5b66856f51c1c3"
+    "revision": "enhanced"
   },
   "_fingerprint": "8bed5ad901895f10b7d0e524c4738cab14cef692"
 }

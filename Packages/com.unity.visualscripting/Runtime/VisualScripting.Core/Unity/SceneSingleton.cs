@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.CompilerServices;
 
 #if UNITY_EDITOR
 using UnityEditor.SceneManagement;
@@ -17,12 +16,10 @@ namespace Unity.VisualScripting
     /// </remarks>
     public static class SceneSingleton<T> where T : MonoBehaviour, ISingleton
     {
-        public readonly struct SceneComparer : IEqualityComparer<Scene>
+        public struct SceneComparer : IEqualityComparer<Scene>
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public readonly bool Equals(Scene x, Scene y) => x.handle == y.handle;
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public readonly int GetHashCode(Scene obj) => obj.handle.GetHashCode();
+            public bool Equals(Scene x, Scene y) => x.handle == y.handle;
+            public int GetHashCode(Scene obj) => obj.handle.GetHashCode();
         }
 
         static SceneSingleton()

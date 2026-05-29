@@ -20,7 +20,7 @@ namespace Unity.VisualScripting
         {
             this.name = name;
             // We need to use object for the inital creation
-            _value = value.ToObject();
+            _value = BoxMutator.CloneBoxSafely(value);
         }
 
         [Serialize]
@@ -52,15 +52,74 @@ namespace Unity.VisualScripting
 
     public static class BoxMutator
     {
+        public static object CloneBoxSafely(ParameterValue obj)
+        {
+            switch (obj.type)
+            {
+                case ParameterValue.ValueType.Bool: return obj.boolValue;
+                case ParameterValue.ValueType.Byte: return obj.byteValue;
+                case ParameterValue.ValueType.SByte: return obj.sbyteValue;
+                case ParameterValue.ValueType.Short: return obj.shortValue;
+                case ParameterValue.ValueType.UShort: return obj.ushortValue;
+                case ParameterValue.ValueType.Int: return obj.intValue;
+                case ParameterValue.ValueType.UInt: return obj.uintValue;
+                case ParameterValue.ValueType.Long: return obj.longValue;
+                case ParameterValue.ValueType.ULong: return obj.ulongValue;
+                case ParameterValue.ValueType.Float: return obj.floatValue;
+                case ParameterValue.ValueType.Double: return obj.doubleValue;
+                case ParameterValue.ValueType.Vector2: return obj.vector2Value;
+                case ParameterValue.ValueType.Vector3: return obj.vector3Value;
+                case ParameterValue.ValueType.Vector4: return obj.vector4Value;
+                case ParameterValue.ValueType.Quaternion: return obj.quaternionValue;
+                case ParameterValue.ValueType.Color: return obj.colorValue;
+
+                case ParameterValue.ValueType.String:
+                    return obj.ObjectValue;
+
+                case ParameterValue.ValueType.Object:
+                    object rawObject = obj.ObjectValue;
+                    if (rawObject == null) return null;
+
+                    if (rawObject.GetType().IsValueType)
+                    {
+                        return rawObject switch
+                        {
+                            bool b => b,
+                            byte by => by,
+                            sbyte sb => sb,
+                            short s => s,
+                            ushort us => us,
+                            int i => i,
+                            uint ui => ui,
+                            long l => l,
+                            ulong ul => ul,
+                            float f => f,
+                            double d => d,
+                            Vector2 v2 => v2,
+                            Vector3 v3 => v3,
+                            Vector4 v4 => v4,
+                            Quaternion q => q,
+                            Color c => c,
+                            _ => RuntimeHelpers.GetObjectValue(rawObject)
+                        };
+                    }
+
+                    return rawObject;
+
+                default:
+                    return null;
+            }
+        }
+
         /// <summary>
         /// Updates an existing boxed value in-place to avoid GC allocations.
         /// Falls back to creating a new box if types do not match.
         /// </summary>
         public static object UpdateBoxedValue(object existingBox, ParameterValue newValue)
         {
-            if (existingBox == null || newValue.UsesObjectID)
+            if (existingBox == null || newValue.usesObjectID)
             {
-                return newValue.ToObject();
+                return newValue.ObjectValue;
             }
 
             switch (newValue.type)

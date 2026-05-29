@@ -10,7 +10,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
-- **Monorepo:** package moved to [uvs-benchmark](https://github.com/miramocha/uvs-benchmark) at `Packages/com.unity.visualscripting/`. Git UPM installs use `?path=/Packages/com.unity.visualscripting` with `#stable`, `#enhanced`, or release tags.
+- **Monorepo:** package lives in [uvs-benchmark](https://github.com/miramocha/uvs-benchmark) at `Packages/com.unity.visualscripting/`. Git UPM installs use `?path=/Packages/com.unity.visualscripting` with `#stable`, `#enhanced`, or release tags.
+
+## [1.9.11-enhanced.3] - 2026-05-29
+
+Synced from [uvs-community-performance-optimization](https://github.com/miramocha/uvs-community-performance-optimization) `enhanced` at `a55fb1c` (PRs #22–#25).
+
+### Added
+
+- **Optimized constructors**: arity-specific `ConstructorInvoker_0`–`5`, shared bases, and `ConstructorReflectionInvoker` fallback; wired through `OptimizedReflection` and member/variable paths ([#24](https://github.com/miramocha/uvs-community-performance-optimization/pull/24), [#25](https://github.com/miramocha/uvs-community-performance-optimization/pull/25)).
+- **Flow debugging** for **On Start** and **On Enable** lifecycle units ([#23](https://github.com/miramocha/uvs-community-performance-optimization/pull/23)).
+
+### Changed
+
+- **Flow** runtime hot paths, **CustomEvent** / **EventUnit**, control units (**Sequence**, **Select**, **Switch**), and **ReflectionInvoker** refactored for fewer allocations ([#24](https://github.com/miramocha/uvs-community-performance-optimization/pull/24)).
+- **`System.Runtime.CompilerServices.Unsafe`** plugin moved under `Runtime/VisualScripting.Core/Plugins/` (Flow asmdef no longer references it directly).
+
+### Fixed
+
+- **Custom events** and **CodeGeneratorValueUtility** compile/runtime issues ([#22](https://github.com/miramocha/uvs-community-performance-optimization/pull/22)).
 
 ## [1.9.11-enhanced.2] - 2026-05-20
 

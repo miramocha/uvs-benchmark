@@ -142,6 +142,9 @@ namespace Unity.VisualScripting
         private OptimizedInvokerBase methodInvoker;
 
         [DoNotSerialize]
+        private OptimizedConstructorInvokerBase constructorInvoker;
+
+        [DoNotSerialize]
         public Type targetType
         {
             get
@@ -465,7 +468,6 @@ namespace Unity.VisualScripting
             }
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private bool ComputeRequiresTarget()
         {
             bool result = source switch
@@ -804,6 +806,11 @@ namespace Unity.VisualScripting
             {
                 methodInvoker = methodInfo?.Prewarm();
             }
+
+            if (constructorInvoker == null)
+            {
+                constructorInvoker = constructorInfo?.Prewarm();
+            }
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1062,6 +1069,11 @@ namespace Unity.VisualScripting
                 {
                     throw new NotSupportedException($"Trying to invoke an open-constructed generic constructor: '{constructorInfo}'.");
                 }
+
+                if (constructorInvoker == null)
+                {
+                    constructorInvoker = constructorInfo.Prewarm();
+                }
             }
             else
             {
@@ -1095,7 +1107,7 @@ namespace Unity.VisualScripting
             }
             else // if (source == Source.Constructor)
             {
-                return constructorInfo.Invoke(EmptyObjects);
+                return constructorInvoker.Invoke(null);
             }
         }
 
@@ -1116,7 +1128,7 @@ namespace Unity.VisualScripting
             }
             else // if (source == Source.Constructor)
             {
-                return constructorInfo.Invoke(new[] { arg0 });
+                return constructorInvoker.Invoke(null, arg0);
             }
         }
 
@@ -1137,7 +1149,7 @@ namespace Unity.VisualScripting
             }
             else // if (source == Source.Constructor)
             {
-                return constructorInfo.Invoke(new[] { arg0, arg1 });
+                return constructorInvoker.Invoke(null, arg0, arg1);
             }
         }
 
@@ -1158,7 +1170,7 @@ namespace Unity.VisualScripting
             }
             else // if (source == Source.Constructor)
             {
-                return constructorInfo.Invoke(new[] { arg0, arg1, arg2 });
+                return constructorInvoker.Invoke(null, arg0, arg1, arg2);
             }
         }
 
@@ -1179,7 +1191,7 @@ namespace Unity.VisualScripting
             }
             else // if (source == Source.Constructor)
             {
-                return constructorInfo.Invoke(new[] { arg0, arg1, arg2, arg3 });
+                return constructorInvoker.Invoke(null, arg0, arg1, arg2, arg3);
             }
         }
 
@@ -1200,7 +1212,7 @@ namespace Unity.VisualScripting
             }
             else // if (source == Source.Constructor)
             {
-                return constructorInfo.Invoke(new[] { arg0, arg1, arg2, arg3, arg4 });
+                return constructorInvoker.Invoke(null, arg0, arg1, arg2, arg3, arg4);
             }
         }
 
@@ -1224,7 +1236,7 @@ namespace Unity.VisualScripting
             }
             else
             {
-                return constructorInfo.Invoke(arguments);
+                return constructorInvoker.Invoke(null, arguments);
             }
         }
 
@@ -1278,15 +1290,7 @@ namespace Unity.VisualScripting
                 throw new UnexpectedEnumValueException<Source>(source);
             }
 
-            int len = arguments.Length;
-            object[] objArgs = new object[len];
-
-            for (int i = 0; i < len; i++)
-            {
-                objArgs[i] = arguments[i].ToObject();
-            }
-
-            return new ParameterValue(constructorInfo.Invoke(objArgs));
+            return constructorInvoker.Invoke(ParameterValue.None, arguments);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1324,7 +1328,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return new ParameterValue(constructorInfo.Invoke(EmptyObjects));
+                return constructorInvoker.Invoke(ParameterValue.None);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);
@@ -1365,7 +1369,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return new ParameterValue(constructorInfo.Invoke(new object[] { arg0.ToObject() }));
+                return constructorInvoker.Invoke(ParameterValue.None, arg0);
             }
             throw new UnexpectedEnumValueException<Source>(source);
         }
@@ -1405,11 +1409,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return new ParameterValue(constructorInfo.Invoke(new object[]
-                {
-                    arg0.ToObject(),
-                    arg1.ToObject()
-                }));
+                return constructorInvoker.Invoke(ParameterValue.None, arg0, arg1);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);
@@ -1450,12 +1450,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return new ParameterValue(constructorInfo.Invoke(new object[]
-                {
-                    arg0.ToObject(),
-                    arg1.ToObject(),
-                    arg2.ToObject()
-                }));
+                return constructorInvoker.Invoke(ParameterValue.None, arg0, arg1, arg2);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);
@@ -1496,13 +1491,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return new ParameterValue(constructorInfo.Invoke(new object[]
-                {
-                    arg0.ToObject(),
-                    arg1.ToObject(),
-                    arg2.ToObject(),
-                    arg3.ToObject()
-                }));
+                return constructorInvoker.Invoke(ParameterValue.None, arg0, arg1, arg2, arg3);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);
@@ -1551,14 +1540,7 @@ namespace Unity.VisualScripting
 
             if (source == Source.Constructor)
             {
-                return new ParameterValue(constructorInfo.Invoke(new object[]
-                {
-                    arg0.ToObject(),
-                    arg1.ToObject(),
-                    arg2.ToObject(),
-                    arg3.ToObject(),
-                    arg4.ToObject()
-                }));
+                return constructorInvoker.Invoke(ParameterValue.None, arg0, arg1, arg2, arg3, arg4);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);

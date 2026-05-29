@@ -38,7 +38,15 @@ namespace Unity.VisualScripting
 #endif
         }
 
-        public SerializationData(string json, params UnityObject[] objectReferences) : this(json, ((IEnumerable<UnityObject>)objectReferences)) { }
+        public SerializationData(string json, params UnityObject[] objectReferences)
+        {
+            _json = json;
+            _objectReferences = objectReferences;
+
+#if DEBUG_SERIALIZATION
+            _guid = Guid.NewGuid().ToString();
+#endif
+        }
 
         internal void Clear()
         {

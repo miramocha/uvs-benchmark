@@ -1,6 +1,8 @@
+using System;
+
 namespace Unity.VisualScripting
 {
-    public class SwitchUnitDescriptor<T> : UnitDescriptor<SwitchUnit<T>>
+    public class SwitchUnitDescriptor<T> : UnitDescriptor<SwitchUnit<T>> where T : IEquatable<T>
     {
         public SwitchUnitDescriptor(SwitchUnit<T> unit) : base(unit) { }
 

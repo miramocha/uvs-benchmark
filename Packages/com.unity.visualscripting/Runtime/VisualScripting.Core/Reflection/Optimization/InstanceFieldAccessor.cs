@@ -41,7 +41,6 @@ namespace Unity.VisualScripting
 
         public override void Compile()
         {
-            // Use Expression for Get and Set if useJit is true, this is alot faster than Reflection.
             if (OptimizedReflection.useJit)
             {
                 var targetExpression = Expression.Parameter(typeof(TTarget), "target");

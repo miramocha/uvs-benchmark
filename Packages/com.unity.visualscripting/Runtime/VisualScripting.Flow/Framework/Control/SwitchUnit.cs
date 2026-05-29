@@ -1,9 +1,10 @@
+using System;
 using System.Collections.Generic;
 
 namespace Unity.VisualScripting
 {
     [TypeIcon(typeof(IBranchUnit))]
-    public abstract class SwitchUnit<T> : Unit, IBranchUnit
+    public abstract class SwitchUnit<T> : Unit, IBranchUnit where T : IEquatable<T>
     {
         // Using L<KVP> instead of Dictionary to allow null key
         [DoNotSerialize]
@@ -62,7 +63,7 @@ namespace Unity.VisualScripting
 
         protected virtual bool Matches(T a, T b)
         {
-            return Equals(a, b);
+            return a.Equals(b);
         }
 
         public ControlOutput Enter(Flow flow)

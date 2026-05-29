@@ -28,36 +28,50 @@ namespace Unity.VisualScripting.FullSerializer
 
         public override fsResult TrySerialize(object instance_, out fsData serialized, Type storageType)
         {
-            var instance = (IEnumerable)instance_;
             var result = fsResult.Success;
-
             var elementType = GetElementType(storageType);
 
-            serialized = fsData.CreateList(HintSize(instance));
-            var serializedList = serialized.AsList;
-
-            foreach (var item in instance)
+            if (instance_ is IList listInstance)
             {
-                fsData itemData;
+                int count = listInstance.Count;
 
-                // note: We don't fail the entire deserialization even if the
-                //       item failed
-                var itemResult = Serializer.TrySerialize(elementType, item, out itemData);
-                result.AddMessages(itemResult);
-                if (itemResult.Failed)
+                serialized = fsData.CreateList(count);
+                var serializedList = serialized.AsList;
+
+                for (int i = 0; i < count; i++)
                 {
-                    continue;
-                }
+                    object item = listInstance[i];
 
-                serializedList.Add(itemData);
+                    fsData itemData;
+                    var itemResult = Serializer.TrySerialize(elementType, item, out itemData);
+                    result.AddMessages(itemResult);
+
+                    if (itemResult.Failed) continue;
+
+                    serializedList.Add(itemData);
+                }
+            }
+            else
+            {
+                var instance = (IEnumerable)instance_;
+                serialized = fsData.CreateList(HintSize(instance));
+                var serializedList = serialized.AsList;
+
+                foreach (var item in instance)
+                {
+                    fsData itemData;
+                    var itemResult = Serializer.TrySerialize(elementType, item, out itemData);
+                    result.AddMessages(itemResult);
+
+                    if (itemResult.Failed) continue;
+
+                    serializedList.Add(itemData);
+                }
             }
 
-            // Stacks iterate from back to front, which means when we deserialize
-            // we will deserialize the items in the wrong order, so the stack
-            // will get reversed.
-            if (IsStack(instance.GetType()))
+            if (IsStack(instance_.GetType()))
             {
-                serializedList.Reverse();
+                serialized.AsList.Reverse();
             }
 
             return result;

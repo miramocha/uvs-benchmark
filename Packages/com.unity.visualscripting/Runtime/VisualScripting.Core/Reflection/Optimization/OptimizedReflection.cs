@@ -27,6 +27,7 @@ namespace Unity.VisualScripting
             fieldAccessors = new Dictionary<FieldInfo, OptimizedAccessorBase>();
             propertyAccessors = new Dictionary<PropertyInfo, OptimizedAccessorBase>();
             methodInvokers = new Dictionary<MethodInfo, OptimizedInvokerBase>();
+            constructorInvokers = new Dictionary<ConstructorInfo, OptimizedConstructorInvokerBase>();
 
             jitAvailable = PlatformUtility.supportsJit;
         }
@@ -34,6 +35,7 @@ namespace Unity.VisualScripting
         private static readonly Dictionary<FieldInfo, OptimizedAccessorBase> fieldAccessors;
         private static readonly Dictionary<PropertyInfo, OptimizedAccessorBase> propertyAccessors;
         private static readonly Dictionary<MethodInfo, OptimizedInvokerBase> methodInvokers;
+        private static readonly Dictionary<ConstructorInfo, OptimizedConstructorInvokerBase> constructorInvokers;
 
         public static readonly bool jitAvailable;
 
@@ -66,6 +68,7 @@ namespace Unity.VisualScripting
             fieldAccessors.Clear();
             propertyAccessors.Clear();
             methodInvokers.Clear();
+            constructorInvokers.Clear();
         }
 
         internal static void VerifyStaticTarget(Type targetType, object target)
@@ -279,6 +282,11 @@ namespace Unity.VisualScripting
 
         #region Methods
 
+        public static OptimizedConstructorInvokerBase Prewarm(this ConstructorInfo constructorInfo)
+        {
+            return GetConstructorInvoker(constructorInfo);
+        }
+
         public static OptimizedInvokerBase Prewarm(this MethodInfo methodInfo)
         {
             return GetMethodInvoker(methodInfo);
@@ -371,19 +379,6 @@ namespace Unity.VisualScripting
         {
             var parameters = methodInfo.GetParameters();
 
-            if (parameters.Length > 5)
-            {
-                if (parameters.Any(parameter => parameter.ParameterType.IsByRef || parameter.ParameterType.IsPointer))
-                {
-                    delegateCompatible = DelegateCompatiblity.Incompatible;
-                }
-                else
-                {
-                    delegateCompatible = DelegateCompatiblity.Compatible;
-                }
-                return false;
-            }
-
             if (parameters.Any(parameter => parameter.ParameterType.IsByRef || parameter.ParameterType.IsPointer))
             {
                 delegateCompatible = DelegateCompatiblity.Incompatible;
@@ -405,6 +400,46 @@ namespace Unity.VisualScripting
             if (methodInfo.CallingConvention == CallingConventions.VarArgs)
             {
                 delegateCompatible = DelegateCompatiblity.Incompatible;
+                return false;
+            }
+
+            if (parameters.Length > 5)
+            {
+                delegateCompatible = DelegateCompatiblity.Compatible;
+                return false;
+            }
+
+            delegateCompatible = DelegateCompatiblity.Compatible;
+            return true;
+        }
+
+        public static bool SupportsOptimization(this ConstructorInfo constructorInfo, out DelegateCompatiblity delegateCompatible)
+        {
+            Type declaringType = constructorInfo.DeclaringType;
+
+            if (declaringType == null || declaringType.IsAbstract || declaringType.ContainsGenericParameters)
+            {
+                delegateCompatible = DelegateCompatiblity.Incompatible;
+                return false;
+            }
+
+            var parameters = constructorInfo.GetParameters();
+
+            if (constructorInfo.CallingConvention == CallingConventions.VarArgs)
+            {
+                delegateCompatible = DelegateCompatiblity.Incompatible;
+                return false;
+            }
+
+            if (parameters.Any(p => p.ParameterType.IsByRef || p.ParameterType.IsPointer))
+            {
+                delegateCompatible = DelegateCompatiblity.Incompatible;
+                return false;
+            }
+
+            if (parameters.Length > 5)
+            {
+                delegateCompatible = DelegateCompatiblity.Compatible;
                 return false;
             }
 
@@ -460,44 +495,46 @@ namespace Unity.VisualScripting
                             }
                             else
                             {
+                                var isStructTarget = IsStructTarget(methodInfo);
+
                                 if (parameters.Length == 0)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceActionInvoker<>).MakeGenericType(methodInfo.DeclaringType);
                                     else
                                         invokerType = typeof(InstanceActionInvoker<>).MakeGenericType(methodInfo.DeclaringType);
                                 }
                                 else if (parameters.Length == 1)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceActionInvoker<,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType);
                                     else
                                         invokerType = typeof(InstanceActionInvoker<,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType);
                                 }
                                 else if (parameters.Length == 2)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceActionInvoker<,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType);
                                     else
                                         invokerType = typeof(InstanceActionInvoker<,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType);
                                 }
                                 else if (parameters.Length == 3)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceActionInvoker<,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType);
                                     else
                                         invokerType = typeof(InstanceActionInvoker<,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType);
                                 }
                                 else if (parameters.Length == 4)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceActionInvoker<,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType);
                                     else
                                         invokerType = typeof(InstanceActionInvoker<,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType);
                                 }
                                 else if (parameters.Length == 5)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceActionInvoker<,,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType, parameters[4].ParameterType);
                                     else
                                         invokerType = typeof(InstanceActionInvoker<,,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType, parameters[4].ParameterType);
@@ -543,44 +580,46 @@ namespace Unity.VisualScripting
                             }
                             else
                             {
+                                var isStructTarget = IsStructTarget(methodInfo);
+
                                 if (parameters.Length == 0)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceFunctionInvoker<,>).MakeGenericType(methodInfo.DeclaringType, methodInfo.ReturnType);
                                     else
                                         invokerType = typeof(InstanceFunctionInvoker<,>).MakeGenericType(methodInfo.DeclaringType, methodInfo.ReturnType);
                                 }
                                 else if (parameters.Length == 1)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceFunctionInvoker<,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, methodInfo.ReturnType);
                                     else
                                         invokerType = typeof(InstanceFunctionInvoker<,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, methodInfo.ReturnType);
                                 }
                                 else if (parameters.Length == 2)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceFunctionInvoker<,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, methodInfo.ReturnType);
                                     else
                                         invokerType = typeof(InstanceFunctionInvoker<,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, methodInfo.ReturnType);
                                 }
                                 else if (parameters.Length == 3)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceFunctionInvoker<,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, methodInfo.ReturnType);
                                     else
                                         invokerType = typeof(InstanceFunctionInvoker<,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, methodInfo.ReturnType);
                                 }
                                 else if (parameters.Length == 4)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceFunctionInvoker<,,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType, methodInfo.ReturnType);
                                     else
                                         invokerType = typeof(InstanceFunctionInvoker<,,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType, methodInfo.ReturnType);
                                 }
                                 else if (parameters.Length == 5)
                                 {
-                                    if (IsStructTarget(methodInfo))
+                                    if (isStructTarget)
                                         invokerType = typeof(StructInstanceFunctionInvoker<,,,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType, parameters[4].ParameterType, methodInfo.ReturnType);
                                     else
                                         invokerType = typeof(InstanceFunctionInvoker<,,,,,,>).MakeGenericType(methodInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType, parameters[4].ParameterType, methodInfo.ReturnType);
@@ -602,6 +641,65 @@ namespace Unity.VisualScripting
                     invoker.Compile();
 
                     methodInvokers.Add(methodInfo, invoker);
+                }
+
+                return invoker;
+            }
+        }
+
+        private static OptimizedConstructorInvokerBase GetConstructorInvoker(ConstructorInfo constructorInfo)
+        {
+            Ensure.That(nameof(constructorInfo)).IsNotNull(constructorInfo);
+
+            lock (constructorInvokers)
+            {
+                if (!constructorInvokers.TryGetValue(constructorInfo, out var invoker))
+                {
+                    var parameters = constructorInfo.GetParameters();
+                    if (SupportsOptimization(constructorInfo, out DelegateCompatiblity delegateCompatible))
+                    {
+                        Type invokerType;
+
+                        switch (parameters.Length)
+                        {
+                            case 0:
+                                invokerType = typeof(ConstructorInvoker<>).MakeGenericType(constructorInfo.DeclaringType);
+                                break;
+
+                            case 1:
+                                invokerType = typeof(ConstructorInvoker<,>).MakeGenericType(constructorInfo.DeclaringType, parameters[0].ParameterType);
+                                break;
+
+                            case 2:
+                                invokerType = typeof(ConstructorInvoker<,,>).MakeGenericType(constructorInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType);
+                                break;
+
+                            case 3:
+                                invokerType = typeof(ConstructorInvoker<,,,>).MakeGenericType(constructorInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType);
+                                break;
+
+                            case 4:
+                                invokerType = typeof(ConstructorInvoker<,,,,>).MakeGenericType(constructorInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType);
+                                break;
+
+                            case 5:
+                                invokerType = typeof(ConstructorInvoker<,,,,,>).MakeGenericType(constructorInfo.DeclaringType, parameters[0].ParameterType, parameters[1].ParameterType, parameters[2].ParameterType, parameters[3].ParameterType, parameters[4].ParameterType);
+                                break;
+
+                            default:
+                                throw new NotSupportedException();
+                        }
+
+                        invoker = (OptimizedConstructorInvokerBase)Activator.CreateInstance(invokerType, constructorInfo);
+                    }
+                    else
+                    {
+                        invoker = new ReflectionConstructorInvoker(constructorInfo, delegateCompatible);
+                    }
+
+                    invoker.Compile();
+
+                    constructorInvokers.Add(constructorInfo, invoker);
                 }
 
                 return invoker;
