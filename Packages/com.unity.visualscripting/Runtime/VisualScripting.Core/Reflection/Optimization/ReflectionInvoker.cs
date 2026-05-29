@@ -3,6 +3,7 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Threading;
 
 namespace Unity.VisualScripting
 {
@@ -11,7 +12,7 @@ namespace Unity.VisualScripting
         private readonly Type[] parameterTypes;
         private readonly DelegateCompatiblity delegateCompatible;
 
-        private readonly object[] Args;
+        private readonly ThreadLocal<object[]> threadArgs;
         private static readonly object[] EmptyObjects = new object[0];
 
         public ReflectionInvoker(MethodInfo methodInfo, DelegateCompatiblity delegateCompatible) : base(methodInfo)
@@ -23,7 +24,7 @@ namespace Unity.VisualScripting
 
             this.delegateCompatible = delegateCompatible;
             parameterTypes = GetParameterTypes();
-            Args = new object[parameterTypes.Length];
+            threadArgs = new ThreadLocal<object[]>(() => new object[parameterTypes.Length]);
         }
 
         private Func<object, object[], object> invoker;
@@ -73,49 +74,97 @@ namespace Unity.VisualScripting
 
         public override object Invoke(object target, object arg0)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            if (invoker != null) return invoker(ConvertTarget(target), Args);
-            return methodInfo.Invoke(ConvertTarget(target), Args);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                object convertedTarget = ConvertTarget(target);
+
+                if (invoker != null) return invoker(convertedTarget, localArgs);
+                return methodInfo.Invoke(convertedTarget, localArgs);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override object Invoke(object target, object arg0, object arg1)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            Args[1] = ConvertArg(arg1, 1);
-            if (invoker != null) return invoker(ConvertTarget(target), Args);
-            return methodInfo.Invoke(ConvertTarget(target), Args);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                localArgs[1] = ConvertArg(arg1, 1);
+                object convertedTarget = ConvertTarget(target);
+
+                if (invoker != null) return invoker(convertedTarget, localArgs);
+                return methodInfo.Invoke(convertedTarget, localArgs);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override object Invoke(object target, object arg0, object arg1, object arg2)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            Args[1] = ConvertArg(arg1, 1);
-            Args[2] = ConvertArg(arg2, 2);
-            if (invoker != null) return invoker(ConvertTarget(target), Args);
-            return methodInfo.Invoke(ConvertTarget(target), Args);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                localArgs[1] = ConvertArg(arg1, 1);
+                localArgs[2] = ConvertArg(arg2, 2);
+                object convertedTarget = ConvertTarget(target);
+
+                if (invoker != null) return invoker(convertedTarget, localArgs);
+                return methodInfo.Invoke(convertedTarget, localArgs);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override object Invoke(object target, object arg0, object arg1, object arg2, object arg3)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            Args[1] = ConvertArg(arg1, 1);
-            Args[2] = ConvertArg(arg2, 2);
-            Args[3] = ConvertArg(arg3, 3);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                localArgs[1] = ConvertArg(arg1, 1);
+                localArgs[2] = ConvertArg(arg2, 2);
+                localArgs[3] = ConvertArg(arg3, 3);
+                object convertedTarget = ConvertTarget(target);
 
-            if (invoker != null) return invoker(ConvertTarget(target), Args);
-            return methodInfo.Invoke(ConvertTarget(target), Args);
+                if (invoker != null) return invoker(convertedTarget, localArgs);
+                return methodInfo.Invoke(convertedTarget, localArgs);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override object Invoke(object target, object arg0, object arg1, object arg2, object arg3, object arg4)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            Args[1] = ConvertArg(arg1, 1);
-            Args[2] = ConvertArg(arg2, 2);
-            Args[3] = ConvertArg(arg3, 3);
-            Args[4] = ConvertArg(arg4, 4);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                localArgs[1] = ConvertArg(arg1, 1);
+                localArgs[2] = ConvertArg(arg2, 2);
+                localArgs[3] = ConvertArg(arg3, 3);
+                localArgs[4] = ConvertArg(arg4, 4);
+                object convertedTarget = ConvertTarget(target);
 
-            if (invoker != null) return invoker(ConvertTarget(target), Args);
-            return methodInfo.Invoke(ConvertTarget(target), Args);
+                if (invoker != null) return invoker(convertedTarget, localArgs);
+                return methodInfo.Invoke(convertedTarget, localArgs);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override object Invoke(object target, params object[] args)
@@ -131,18 +180,25 @@ namespace Unity.VisualScripting
 
         public override ParameterValue Invoke(ParameterValue target, Span<ParameterValue> args)
         {
-            int count = args.Length;
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                int count = args.Length;
+                for (int i = 0; i < count; i++)
+                    localArgs[i] = ConvertArg(args[i], i);
 
-            for (int i = 0; i < count; i++)
-                Args[i] = ConvertArg(args[i], i);
+                object boxedTarget = ConvertTarget(target);
 
-            object boxedTarget = ConvertTarget(target);
+                object result = invoker != null
+                    ? invoker(boxedTarget, localArgs)
+                    : methodInfo.Invoke(boxedTarget, localArgs);
 
-            object result = invoker != null
-                ? invoker(boxedTarget, Args)
-                : methodInfo.Invoke(boxedTarget, Args);
-
-            return new ParameterValue(result);
+                return new ParameterValue(result);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override ParameterValue InvokeRef(ref ParameterValue target, Span<ParameterValue> args)
@@ -163,75 +219,115 @@ namespace Unity.VisualScripting
 
         public override ParameterValue Invoke(ParameterValue target, ParameterValue arg0)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            object boxedTarget = ConvertTarget(target);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                object boxedTarget = ConvertTarget(target);
 
-            object result = invoker != null
-                ? invoker(boxedTarget, Args)
-                : methodInfo.Invoke(boxedTarget, Args);
+                object result = invoker != null
+                    ? invoker(boxedTarget, localArgs)
+                    : methodInfo.Invoke(boxedTarget, localArgs);
 
-            return new ParameterValue(result);
+                return new ParameterValue(result);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            Args[1] = ConvertArg(arg1, 1);
-            object boxedTarget = ConvertTarget(target);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                localArgs[1] = ConvertArg(arg1, 1);
+                object boxedTarget = ConvertTarget(target);
 
-            object result = invoker != null
-                ? invoker(boxedTarget, Args)
-                : methodInfo.Invoke(boxedTarget, Args);
+                object result = invoker != null
+                    ? invoker(boxedTarget, localArgs)
+                    : methodInfo.Invoke(boxedTarget, localArgs);
 
-            return new ParameterValue(result);
+                return new ParameterValue(result);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            Args[1] = ConvertArg(arg1, 1);
-            Args[2] = ConvertArg(arg2, 2);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                localArgs[1] = ConvertArg(arg1, 1);
+                localArgs[2] = ConvertArg(arg2, 2);
 
-            object boxedTarget = ConvertTarget(target);
+                object boxedTarget = ConvertTarget(target);
 
-            object result = invoker != null
-                ? invoker(boxedTarget, Args)
-                : methodInfo.Invoke(boxedTarget, Args);
+                object result = invoker != null
+                    ? invoker(boxedTarget, localArgs)
+                    : methodInfo.Invoke(boxedTarget, localArgs);
 
-            return new ParameterValue(result);
+                return new ParameterValue(result);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            Args[1] = ConvertArg(arg1, 1);
-            Args[2] = ConvertArg(arg2, 2);
-            Args[3] = ConvertArg(arg3, 3);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                localArgs[1] = ConvertArg(arg1, 1);
+                localArgs[2] = ConvertArg(arg2, 2);
+                localArgs[3] = ConvertArg(arg3, 3);
 
-            object boxedTarget = ConvertTarget(target);
+                object boxedTarget = ConvertTarget(target);
 
-            object result = invoker != null
-                ? invoker(boxedTarget, Args)
-                : methodInfo.Invoke(boxedTarget, Args);
+                object result = invoker != null
+                    ? invoker(boxedTarget, localArgs)
+                    : methodInfo.Invoke(boxedTarget, localArgs);
 
-            return new ParameterValue(result);
+                return new ParameterValue(result);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
         {
-            Args[0] = ConvertArg(arg0, 0);
-            Args[1] = ConvertArg(arg1, 1);
-            Args[2] = ConvertArg(arg2, 2);
-            Args[3] = ConvertArg(arg3, 3);
-            Args[4] = ConvertArg(arg4, 4);
+            object[] localArgs = threadArgs.Value;
+            try
+            {
+                localArgs[0] = ConvertArg(arg0, 0);
+                localArgs[1] = ConvertArg(arg1, 1);
+                localArgs[2] = ConvertArg(arg2, 2);
+                localArgs[3] = ConvertArg(arg3, 3);
+                localArgs[4] = ConvertArg(arg4, 4);
 
-            object boxedTarget = ConvertTarget(target);
+                object boxedTarget = ConvertTarget(target);
 
-            object result = invoker != null
-                ? invoker(boxedTarget, Args)
-                : methodInfo.Invoke(boxedTarget, Args);
+                object result = invoker != null
+                    ? invoker(boxedTarget, localArgs)
+                    : methodInfo.Invoke(boxedTarget, localArgs);
 
-            return new ParameterValue(result);
+                return new ParameterValue(result);
+            }
+            finally
+            {
+                Array.Clear(localArgs, 0, localArgs.Length);
+            }
         }
 
         public override ParameterValue InvokeRef(ref ParameterValue target)
@@ -312,20 +408,9 @@ namespace Unity.VisualScripting
             return methodInfo.GetParameters().Select(pi => pi.ParameterType).ToArray();
         }
 
-        protected override void CompileExpression()
-        {
-        }
-
-        protected override void CreateDelegate()
-        {
-        }
-
-        protected override void VerifyTarget(object target)
-        {
-        }
-
-        protected override void VerifyTarget(ParameterValue target)
-        {
-        }
+        protected override void CompileExpression() { }
+        protected override void CreateDelegate() { }
+        protected override void VerifyTarget(object target) { }
+        protected override void VerifyTarget(ParameterValue target) { }
     }
 }

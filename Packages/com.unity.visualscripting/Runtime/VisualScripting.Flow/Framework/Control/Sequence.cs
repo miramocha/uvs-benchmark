@@ -55,9 +55,9 @@ namespace Unity.VisualScripting
         {
             var stack = flow.PreserveStack();
 
-            foreach (var output in multiOutputs)
+            for (int i = 0; i < multiOutputs.Count; i++)
             {
-                flow.Invoke(output);
+                flow.Invoke(multiOutputs[i]);
 
                 flow.RestoreStack(stack);
             }
@@ -71,9 +71,9 @@ namespace Unity.VisualScripting
         {
             var stack = flow.PreserveStack();
 
-            foreach (var output in multiOutputs)
+            for (int i = 0; i < multiOutputs.Count; i++)
             {
-                yield return output;
+                yield return multiOutputs[i];
 
                 flow.RestoreStack(stack);
             }

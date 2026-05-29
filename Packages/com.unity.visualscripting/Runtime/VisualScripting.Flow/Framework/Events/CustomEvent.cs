@@ -62,9 +62,9 @@ namespace Unity.VisualScripting
             {
                 var argValue = args.arguments[i];
 
-                if (argValue.UsesObjectID)
+                if (argValue.usesObjectID)
                 {
-                    flow.SetValue(argumentPorts[i], argValue.ToObject());
+                    flow.SetValue(argumentPorts[i], argValue.ObjectValue);
                 }
                 else
                 {
@@ -84,6 +84,24 @@ namespace Unity.VisualScripting
             try
             {
                 EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, values));
+            }
+            finally
+            {
+                values.Dispose();
+            }
+        }
+
+        public static void TriggerDebug(GameObject target, string name, params object[] args)
+        {
+            var values = new NativeArray<ParameterValue>(args.Length, Allocator.Temp);
+            for (int i = 0; i < args.Length; i++)
+            {
+                values[i] = new ParameterValue(args[i]);
+            }
+
+            try
+            {
+                EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, values, true));
             }
             finally
             {

@@ -353,8 +353,7 @@ namespace Unity.VisualScripting
         {
             base.Initialize();
 
-            bool isVariableDeclarationContext = metadata.parent.valueType == typeof(VariableDeclaration);
-            if (isVariableDeclarationContext && metadata.GetAncestorAttribute<ValueAttribute>() != null)
+            if (metadata.GetAncestorAttribute<ValueAttribute>() != null)
             {
                 inspector = new ValueInspector(this);
             }

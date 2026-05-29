@@ -40,10 +40,10 @@ namespace Unity.VisualScripting
         }
 
         [Serialize, HideInInspector]
-        public List<UnityObject> compiledReferences = new List<UnityObject>();
+        public List<UnityObject> compiledReferences;
 
         [Serialize, HideInInspector]
-        public List<string> compiledReferenceNames = new List<string>();
+        public List<string> compiledReferenceNames;
 
         [DoNotSerialize]
         IGraphNest IGraphNester.nest => nest;
@@ -133,16 +133,19 @@ namespace Unity.VisualScripting
 
                         _compiledComponent.hideFlags = HideFlags.HideInInspector | HideFlags.DontSaveInEditor;
 
-                        if (compiledReferences.Count != compiledReferenceNames.Count)
+                        if (compiledReferences != null && compiledReferenceNames != null)
                         {
-                            Debug.LogError($"Mismatched compiled reference names and objects on {gameObject.name}. Try and recompile the script.", this);
-                            return;
-                        }
+                            if (compiledReferences.Count != compiledReferenceNames.Count)
+                            {
+                                Debug.LogError($"Mismatched compiled reference names and objects on {gameObject.name}. Try and recompile the script.", this);
+                                return;
+                            }
 
-                        for (int i = 0; i < compiledReferenceNames.Count; i++)
-                        {
-                            var field = compiledType.GetField(compiledReferenceNames[i]);
-                            if (field != null) field.SetValue(_compiledComponent, compiledReferences[i]);
+                            for (int i = 0; i < compiledReferenceNames.Count; i++)
+                            {
+                                var field = compiledType.GetField(compiledReferenceNames[i]);
+                                if (field != null) field.SetValue(_compiledComponent, compiledReferences[i]);
+                            }
                         }
                     }
                 }

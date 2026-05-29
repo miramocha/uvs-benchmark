@@ -36,7 +36,7 @@ namespace Unity.VisualScripting
     {
         static EventBus()
         {
-            events = new Dictionary<EventHook, HashSet<Delegate>>(new EventHookComparer());
+            events = new Dictionary<EventHook, HashSet<Delegate>>(256, new EventHookComparer());
         }
 
         private static readonly Dictionary<EventHook, HashSet<Delegate>> events;
@@ -109,9 +109,11 @@ namespace Unity.VisualScripting
             Trigger(new EventHook(name, target), args);
         }
 
+        private static readonly EmptyEventArgs emptyArgs = new EmptyEventArgs();
+
         public static void Trigger(EventHook hook)
         {
-            Trigger(hook, new EmptyEventArgs());
+            Trigger(hook, emptyArgs);
         }
 
         public static void Trigger(string name, GameObject target)

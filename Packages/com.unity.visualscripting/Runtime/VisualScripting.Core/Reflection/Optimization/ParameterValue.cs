@@ -24,6 +24,7 @@ namespace Unity.VisualScripting
         }
 
         [FieldOffset(0)] public readonly ValueType type;
+        [FieldOffset(4)] public readonly bool usesObjectID;
         [FieldOffset(8)] public readonly int objectID;
         [FieldOffset(8)] public readonly byte byteValue;
         [FieldOffset(8)] public readonly sbyte sbyteValue;
@@ -54,7 +55,7 @@ namespace Unity.VisualScripting
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
-                if (UsesObjectID)
+                if (usesObjectID)
                 {
                     uint idx = (uint)objectID;
                     if (idx < (uint)ManagedObjects.Length)
@@ -102,12 +103,6 @@ namespace Unity.VisualScripting
                 decimal => true,
                 _ => false
             };
-        }
-
-        public readonly bool UsesObjectID
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (byte)type >= (byte)ValueType.String;
         }
 
         /// <summary>
@@ -394,7 +389,6 @@ namespace Unity.VisualScripting
                 return Unsafe.As<decimal, T>(ref val);
             }
 
-            // Ultimate fallback for custom struct numeric wrappers
             return (T)System.Convert.ChangeType(objectValue, typeof(T));
         }
 
@@ -526,12 +520,12 @@ namespace Unity.VisualScripting
                 typeof(T) == typeof(short) || typeof(T) == typeof(ushort) ||
                 typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
             {
-                return ((byte)type >= 1 & (byte)type <= 10) || (type == ValueType.Object && (ObjectValue?.IsConvertibleTo<T>(true) ?? false));
+                return (type >= ValueType.Byte && type <= ValueType.Double) || (type == ValueType.Object && (ObjectValue?.IsConvertibleTo<T>(true) ?? false));
             }
 
             if (typeof(T) == typeof(Vector3) || typeof(T) == typeof(Vector2) || typeof(T) == typeof(Vector4))
             {
-                return ((byte)type >= 11 & (byte)type <= 13) || ConversionUtility.CanConvert(GetValueType(), typeof(T), true); // Slower but flexible conversion
+                return (type >= ValueType.Vector2 && type <= ValueType.Vector4) || ConversionUtility.CanConvert(GetValueType(), typeof(T), true); // Slower but flexible conversion
             }
 
             if (typeof(T) == typeof(bool)) return type == ValueType.Bool || ConversionUtility.CanConvert(GetValueType(), typeof(T), true);
@@ -556,7 +550,7 @@ namespace Unity.VisualScripting
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly bool IsNull() => (type == (byte)ValueType.None) | ((byte)type >= (byte)ValueType.String & objectID == -1);
+        public readonly bool IsNull() => (type == (byte)ValueType.None) || ((byte)type >= (byte)ValueType.String && (objectID == -1 || ObjectValue == null));
 
         #endregion
 
@@ -693,10 +687,7 @@ namespace Unity.VisualScripting
 
             if (IsNumeric<T>())
             {
-                if (obj is IConvertible)
-                {
-                    return AsNumeric<T>();
-                }
+                return AsNumeric<T>();
             }
             return Convert<T>(obj);
         }
@@ -944,6 +935,12 @@ namespace Unity.VisualScripting
             _ => null
         };
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal readonly void SetTypeUnsafe(ValueType newType)
+        {
+            Unsafe.AsRef(in type) = newType;
+        }
+
         #region Create
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1080,6 +1077,7 @@ namespace Unity.VisualScripting
             Unsafe.SkipInit(out this);
             type = ValueType.String;
             objectID = AllocateObject(value);
+            usesObjectID = true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1089,6 +1087,7 @@ namespace Unity.VisualScripting
             type = ValueType.String;
             handle = AllocateObject(value);
             objectID = handle;
+            usesObjectID = true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1097,6 +1096,7 @@ namespace Unity.VisualScripting
             Unsafe.SkipInit(out this);
             type = ValueType.Object;
             objectID = AllocateObject(value);
+            usesObjectID = true;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1106,6 +1106,7 @@ namespace Unity.VisualScripting
             type = ValueType.Object;
             handle = AllocateObject(value);
             objectID = handle;
+            usesObjectID = true;
         }
 
         private static int AllocateObject(object value)

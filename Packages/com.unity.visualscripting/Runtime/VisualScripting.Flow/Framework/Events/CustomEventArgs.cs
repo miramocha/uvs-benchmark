@@ -11,7 +11,7 @@ namespace Unity.VisualScripting
         
         /// <summary>
         /// Used to enable debug flow for custom events, 
-        /// which is disabled by default since custom events can run very frequently and enabling debug flow can cause performance issues. 
+        /// which is disabled by default since custom events can run frequently and enabling debug flow can cause performance issues. 
         /// This is ignored in a build, where debug flow is always disabled.
         /// </summary>
         public readonly bool debug;

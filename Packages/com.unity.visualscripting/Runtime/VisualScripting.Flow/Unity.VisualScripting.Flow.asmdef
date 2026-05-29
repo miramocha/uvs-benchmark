@@ -10,7 +10,6 @@
     "allowUnsafeCode": true,
     "overrideReferences": true,
     "precompiledReferences": [
-        "System.Runtime.CompilerServices.Unsafe.dll",
         "Unity.VisualScripting.Antlr3.Runtime.dll"
     ],
     "autoReferenced": true,

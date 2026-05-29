@@ -132,6 +132,7 @@ namespace Unity.VisualScripting
             if (other == null) return;
 
             _currentDataCache = other._currentDataCache;
+            depth = other.depth;
 
             if (!isCloning && version == other.version) return;
 
@@ -147,8 +148,6 @@ namespace Unity.VisualScripting
             SyncList(debugDataStack, other.debugDataStack);
 
             version = otherVersion;
-
-            depth = other.depth;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

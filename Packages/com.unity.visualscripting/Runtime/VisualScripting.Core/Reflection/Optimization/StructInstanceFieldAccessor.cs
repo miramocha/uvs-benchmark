@@ -38,18 +38,34 @@ namespace Unity.VisualScripting
 
         public override void Compile()
         {
-            fieldOffset = UnsafeUtility.GetFieldOffset(fieldInfo);
-
-            useDirectUnsafeMapping = UnsafeUtility.IsBlittable(typeof(TTarget)) && UnsafeUtility.IsBlittable(typeof(TField));
-
-            getter = ReflectionGetter;
-
-            if (fieldInfo.CanWrite())
+            if (OptimizedReflection.useJit)
             {
-                setter = ReflectionSetter;
+                var targetParam = Expression.Parameter(typeof(TTarget).MakeByRefType(), "target");
+                var fieldAccess = Expression.Field(targetParam, fieldInfo);
+
+                getter = Expression.Lambda<GetterDelegate>(fieldAccess, targetParam).Compile();
+
+                if (fieldInfo.CanWrite())
+                {
+                    var valueParam = Expression.Parameter(typeof(TField), "value");
+                    var assign = Expression.Assign(fieldAccess, valueParam);
+
+                    setter = Expression.Lambda<SetterDelegate>(assign, targetParam, valueParam).Compile();
+                }
+            }
+            else
+            {
+                fieldOffset = UnsafeUtility.GetFieldOffset(fieldInfo);
+                useDirectUnsafeMapping = UnsafeUtility.IsBlittable(typeof(TTarget)) && UnsafeUtility.IsBlittable(typeof(TField));
+
+                getter = ReflectionGetter;
+
+                if (fieldInfo.CanWrite())
+                {
+                    setter = ReflectionSetter;
+                }
             }
         }
-
         private TField ReflectionGetter(ref TTarget target)
         {
             if (useDirectUnsafeMapping)

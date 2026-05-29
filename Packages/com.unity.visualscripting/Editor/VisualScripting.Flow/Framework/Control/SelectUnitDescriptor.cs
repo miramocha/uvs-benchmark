@@ -1,6 +1,8 @@
+using System;
+
 namespace Unity.VisualScripting
 {
-    public class SelectUnitDescriptor<T> : UnitDescriptor<SelectUnit<T>>
+    public class SelectUnitDescriptor<T> : UnitDescriptor<SelectUnit<T>> where T : IEquatable<T>
     {
         public SelectUnitDescriptor(SelectUnit<T> unit) : base(unit) { }
 

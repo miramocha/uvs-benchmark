@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace Unity.VisualScripting
@@ -52,10 +53,17 @@ namespace Unity.VisualScripting
         public GraphStack stack { get; private set; }
 
         private Recursion<RecursionNode> recursion;
+        
         private sealed class PortDictionary
         {
-            private IUnitValuePort[] _keys;
-            private ParameterValue[] _values;
+            [StructLayout(LayoutKind.Sequential)]
+            private struct Entry
+            {
+                public IUnitValuePort Key;
+                public ParameterValue Value;
+            }
+
+            private Entry[] _entries;
             private int _mask;
             private int _count;
             private int _resizeAmount;
@@ -65,8 +73,7 @@ namespace Unity.VisualScripting
                 int size = 1;
                 while (size < capacity) size <<= 1;
 
-                _keys = new IUnitValuePort[size];
-                _values = new ParameterValue[size];
+                _entries = new Entry[size];
                 _mask = size - 1;
                 _resizeAmount = (size >> 1) + (size >> 2);
             }
@@ -74,18 +81,18 @@ namespace Unity.VisualScripting
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Contains(IUnitValuePort key)
             {
-                var keys = _keys;
+                var entries = _entries;
                 int m = _mask;
                 int hash = (int)((uint)RuntimeHelpers.GetHashCode(key) * 2654435769u);
                 int index = hash & m;
 
-                IUnitValuePort k = keys[index];
+                IUnitValuePort k = entries[index].Key;
 
                 while (k != null)
                 {
                     if (ReferenceEquals(k, key)) return true;
                     index = (index + 1) & m;
-                    k = keys[index];
+                    k = entries[index].Key;
                 }
                 return false;
             }
@@ -93,22 +100,22 @@ namespace Unity.VisualScripting
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool TryGetValue(IUnitValuePort key, out ParameterValue value)
             {
-                var keys = _keys;
+                var entries = _entries;
                 int m = _mask;
                 int hash = (int)((uint)RuntimeHelpers.GetHashCode(key) * 2654435769u);
                 int index = hash & m;
 
-                IUnitValuePort k = keys[index];
+                IUnitValuePort k = entries[index].Key;
 
                 while (k != null)
                 {
                     if (ReferenceEquals(k, key))
                     {
-                        value = _values[index];
+                        value = entries[index].Value;
                         return true;
                     }
                     index = (index + 1) & m;
-                    k = keys[index];
+                    k = entries[index].Key;
                 }
 
                 value = default;
@@ -117,34 +124,34 @@ namespace Unity.VisualScripting
 
             public ref ParameterValue GetValueRefOrAdd(IUnitValuePort key, out bool exists)
             {
-                var keys = _keys;
+                var entries = _entries;
 
                 if (_count >= _resizeAmount)
                 {
                     Resize();
-                    keys = _keys;
+                    entries = _entries;
                 }
 
                 int m = _mask;
                 int hash = (int)((uint)RuntimeHelpers.GetHashCode(key) * 2654435769u);
                 int i = hash & m;
 
-                IUnitValuePort k = keys[i];
+                IUnitValuePort k = entries[i].Key;
                 while (k != null)
                 {
                     if (ReferenceEquals(k, key))
                     {
                         exists = true;
-                        return ref _values[i];
+                        return ref entries[i].Value;
                     }
                     i = (i + 1) & m;
-                    k = keys[i];
+                    k = entries[i].Key;
                 }
 
                 exists = false;
-                keys[i] = key;
+                entries[i].Key = key;
                 _count++;
-                return ref _values[i];
+                return ref entries[i].Value;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -156,30 +163,28 @@ namespace Unity.VisualScripting
 
             private void Resize()
             {
-                var oldKeys = _keys;
-                var oldValues = _values;
-                int newSize = oldKeys.Length * 2;
+                var oldEntries = _entries;
+                int newSize = oldEntries.Length * 2;
 
-                _keys = new IUnitValuePort[newSize];
-                _values = new ParameterValue[newSize];
+                _entries = new Entry[newSize];
                 _mask = newSize - 1;
                 _count = 0;
                 _resizeAmount = (newSize >> 1) + (newSize >> 2);
 
-                for (int i = 0; i < oldKeys.Length; i++)
+                for (int i = 0; i < oldEntries.Length; i++)
                 {
-                    var key = oldKeys[i];
+                    var key = oldEntries[i].Key;
                     if (key != null)
                     {
                         int hash = (int)((uint)RuntimeHelpers.GetHashCode(key) * 2654435769u);
                         int idx = hash & _mask;
-                        while (_keys[idx] != null)
+                        while (_entries[idx].Key != null)
                         {
                             idx = (idx + 1) & _mask;
                         }
 
-                        _keys[idx] = key;
-                        _values[idx] = oldValues[i];
+                        _entries[idx].Key = key;
+                        _entries[idx].Value = oldEntries[i].Value;
                         _count++;
                     }
                 }
@@ -189,7 +194,7 @@ namespace Unity.VisualScripting
             {
                 if (_count > 0)
                 {
-                    Array.Clear(_keys, 0, _keys.Length);
+                    Array.Clear(_entries, 0, _entries.Length);
                     _count = 0;
                 }
             }
@@ -202,7 +207,7 @@ namespace Unity.VisualScripting
 
         private readonly Stack<int> loops = new Stack<int>();
 
-        private readonly List<GraphStack> preservedStacks = new List<GraphStack>(6);
+        private readonly HashSet<GraphStack> preservedStacks = new HashSet<GraphStack>(6);
 
         public MonoBehaviour coroutineRunner { get; private set; }
 
@@ -299,14 +304,13 @@ namespace Unity.VisualScripting
             // Preserved stacks could remain if coroutine was interrupted
             if (preservedStacks.Count > 0)
             {
-                for (int i = 0; i < preservedStacks.Count; i++)
+                foreach (var preservedStack in preservedStacks)
                 {
-                    preservedStacks[i].Dispose();
+                    preservedStack.Dispose();
                 }
 
                 preservedStacks.Clear();
             }
-
 
             foreach (var id in usedIDs)
             {
@@ -349,13 +353,7 @@ namespace Unity.VisualScripting
         public void DisposePreservedStack(GraphStack stack)
         {
             stack.Dispose();
-            int index = preservedStacks.LastIndexOf(stack);
-            if (index >= 0)
-            {
-                int lastIndex = preservedStacks.Count - 1;
-                preservedStacks[index] = preservedStacks[lastIndex];
-                preservedStacks.RemoveAt(lastIndex);
-            }
+            preservedStacks.Remove(stack);
         }
         #endregion
 
@@ -583,129 +581,120 @@ namespace Unity.VisualScripting
 
             if (input == null) yield break;
 
-            if (Recursion.safeMode)
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var recursionNode = new RecursionNode(output, stack);
+
+            BeforeInvoke(output, recursionNode);
+
+            if (input.supportsCoroutine)
             {
-                var recursionNode = new RecursionNode(output, stack);
+                IEnumerable instructions;
 
-                BeforeInvoke(output, recursionNode);
-
-                if (input.supportsCoroutine)
+                try
                 {
-                    IEnumerable instructions;
-
-                    try
-                    {
-                        instructions = InvokeCoroutineDelegate(input);
-                    }
-                    catch (Exception ex)
-                    {
-                        HandleException(ex, input.unit);
-                        AfterInvoke(recursionNode);
-                        throw;
-                    }
-
-                    foreach (var instruction in instructions)
-                    {
-                        if (instruction is ControlOutput)
-                        {
-                            foreach (var unwrappedInstruction in InvokeCoroutine((ControlOutput)instruction))
-                            {
-                                yield return unwrappedInstruction;
-                            }
-                        }
-                        else
-                        {
-                            yield return instruction;
-                        }
-                    }
+                    instructions = InvokeCoroutineDelegate(input);
                 }
-                else
+                catch (Exception ex)
                 {
-                    ControlOutput nextPort;
-
-                    try
-                    {
-                        if (input.requiresCoroutine)
-                            throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
-
-                        nextPort = input.action(this);
-                    }
-                    catch (Exception ex)
-                    {
-                        HandleException(ex, input.unit);
-                        AfterInvoke(recursionNode);
-                        throw;
-                    }
-
-                    if (nextPort != null)
-                    {
-                        foreach (var instruction in InvokeCoroutine(nextPort))
-                        {
-                            yield return instruction;
-                        }
-                    }
+                    HandleException(ex, input.unit);
+                    AfterInvoke(recursionNode);
+                    throw;
                 }
 
-                AfterInvoke(recursionNode);
+                foreach (var instruction in instructions)
+                {
+                    if (instruction is ControlOutput)
+                    {
+                        foreach (var unwrappedInstruction in InvokeCoroutine((ControlOutput)instruction))
+                        {
+                            yield return unwrappedInstruction;
+                        }
+                    }
+                    else
+                    {
+                        yield return instruction;
+                    }
+                }
             }
             else
             {
-                if (input.supportsCoroutine)
+                ControlOutput nextPort;
+
+                try
                 {
-                    IEnumerable instructions;
+                    if (input.requiresCoroutine)
+                        throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
 
-                    try
-                    {
-                        instructions = InvokeCoroutineDelegate(input);
-                    }
-                    catch (Exception ex)
-                    {
-                        HandleException(ex, input.unit);
-                        throw;
-                    }
-
-                    foreach (var instruction in instructions)
-                    {
-                        if (instruction is ControlOutput)
-                        {
-                            foreach (var unwrappedInstruction in InvokeCoroutine((ControlOutput)instruction))
-                            {
-                                yield return unwrappedInstruction;
-                            }
-                        }
-                        else
-                        {
-                            yield return instruction;
-                        }
-                    }
+                    nextPort = input.action(this);
                 }
-                else
+                catch (Exception ex)
                 {
-                    ControlOutput nextPort;
-
-                    try
-                    {
-                        if (input.requiresCoroutine)
-                            throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
-
-                        nextPort = input.action(this);
-                    }
-                    catch (Exception ex)
-                    {
-                        HandleException(ex, input.unit);
-                        throw;
-                    }
-
-                    if (nextPort != null)
-                    {
-                        foreach (var instruction in InvokeCoroutine(nextPort))
-                        {
-                            yield return instruction;
-                        }
-                    }
+                    HandleException(ex, input.unit);
+                    AfterInvoke(recursionNode);
+                    throw;
                 }
 
+                if (nextPort != null)
+                {
+                    foreach (var instruction in InvokeCoroutine(nextPort))
+                    {
+                        yield return instruction;
+                    }
+                }
             }
+
+            AfterInvoke(recursionNode);
+#else
+            if (input.supportsCoroutine)
+            {
+                IEnumerable instructions;
+                try
+                {
+                    instructions = InvokeCoroutineDelegate(input);
+                }
+                catch (Exception ex)
+                {
+                    HandleException(ex, input.unit);
+                    throw;
+                }
+                foreach (var instruction in instructions)
+                {
+                    if (instruction is ControlOutput)
+                    {
+                        foreach (var unwrappedInstruction in InvokeCoroutine((ControlOutput)instruction))
+                        {
+                            yield return unwrappedInstruction;
+                        }
+                    }
+                    else
+                    {
+                        yield return instruction;
+                    }
+                }
+            }
+            else
+            {
+                ControlOutput nextPort;
+                try
+                {
+                    if (input.requiresCoroutine)
+                        throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
+                    nextPort = input.action(this);
+                }
+                catch (Exception ex)
+                {
+                    HandleException(ex, input.unit);
+                    throw;
+                }
+                if (nextPort != null)
+                {
+                    foreach (var instruction in InvokeCoroutine(nextPort))
+                    {
+                        yield return instruction;
+                    }
+                }
+            }
+#endif
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -816,13 +805,13 @@ namespace Unity.VisualScripting
         {
             ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
 
-            if (exists & existing.UsesObjectID)
+            if (exists & existing.usesObjectID)
             {
                 ParameterValue.UpdateObject(existing.objectID, value);
 
                 if (existing.type != ParameterValue.ValueType.String)
                 {
-                    Unsafe.AsRef(in existing.type) = ParameterValue.ValueType.String;
+                    existing.SetTypeUnsafe(ParameterValue.ValueType.String);
                 }
             }
             else
@@ -848,12 +837,12 @@ namespace Unity.VisualScripting
         public void SetValue(IUnitValuePort port, object value)
         {
             ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
-            if (exists & existing.UsesObjectID)
+            if (exists & existing.usesObjectID)
             {
                 ParameterValue.UpdateObject(existing.objectID, value);
                 if (existing.type != ParameterValue.ValueType.Object)
                 {
-                    Unsafe.AsRef(in existing.type) = ParameterValue.ValueType.Object;
+                    existing.SetTypeUnsafe(ParameterValue.ValueType.Object);
                 }
                 return;
             }
@@ -870,7 +859,7 @@ namespace Unity.VisualScripting
 
             if (exists)
             {
-                if (existing.UsesObjectID & value.UsesObjectID)
+                if (existing.usesObjectID & value.usesObjectID)
                 {
                     ParameterValue.UpdateObject(existing.objectID, value.ObjectValue);
                     existing = value;
@@ -878,7 +867,7 @@ namespace Unity.VisualScripting
                 }
             }
 
-            if (value.UsesObjectID)
+            if (value.usesObjectID)
             {
                 usedIDs.Add(value.objectID);
             }
@@ -900,7 +889,7 @@ namespace Unity.VisualScripting
                     try
                     {
                         value = output.getValue(this);
-                        if (value.UsesObjectID) usedIDs.Add(value.objectID);
+                        if (value.usesObjectID) usedIDs.Add(value.objectID);
                         if (output.supportsCache) locals.Set(output, value);
                     }
                     catch (Exception ex)
@@ -1073,7 +1062,7 @@ namespace Unity.VisualScripting
                 {
                     value = output.getValue(this);
 
-                    if (value.UsesObjectID)
+                    if (value.usesObjectID)
                         usedIDs.Add(value.objectID);
                 }
                 catch (Exception ex)
@@ -1176,7 +1165,7 @@ namespace Unity.VisualScripting
                     {
                         parameterValue = output.getValue(flow);
 
-                        if (parameterValue.UsesObjectID)
+                        if (parameterValue.usesObjectID)
                             flow.usedIDs.Add(parameterValue.objectID);
                     }
                     catch (Exception ex)

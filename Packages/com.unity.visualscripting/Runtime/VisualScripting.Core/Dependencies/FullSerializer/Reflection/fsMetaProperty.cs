@@ -103,7 +103,6 @@ namespace Unity.VisualScripting.FullSerializer
             }
         }
 
-        private readonly object[] SetArray = new object[1];
         /// <summary>
         /// Writes a value to the property that this MetaProperty represents,
         /// using given object instance as the context.
@@ -112,8 +111,6 @@ namespace Unity.VisualScripting.FullSerializer
         {
             var field = _memberInfo as FieldInfo;
             var property = _memberInfo as PropertyInfo;
-
-            if (value is ParameterValue parameter) value = parameter.ToObject();
 
             if (field != null)
             {
@@ -137,8 +134,7 @@ namespace Unity.VisualScripting.FullSerializer
                     var setMethod = property.GetSetMethod(/*nonPublic:*/ true);
                     if (setMethod != null)
                     {
-                        SetArray[0] = value;
-                        setMethod.Invoke(context, SetArray);
+                        setMethod.Invoke(context, new object[] { value });
                     }
                 }
             }
@@ -152,19 +148,17 @@ namespace Unity.VisualScripting.FullSerializer
         {
             if (_memberInfo is PropertyInfo)
             {
-#if LUDIQ_OPTIMIZE
-                return ((PropertyInfo)_memberInfo).GetValueOptimized(context);
-#else
-                return ((PropertyInfo)_memberInfo).GetValue(context, null); // Attempt fix-1588
-#endif
+                if (PlatformUtility.supportsJit && CanRead)
+                    return ((PropertyInfo)_memberInfo).GetValueOptimized(context);
+                else
+                    return ((PropertyInfo)_memberInfo).GetValue(context, null); // Attempt fix-1588
             }
             else
             {
-#if LUDIQ_OPTIMIZE
-                return ((FieldInfo)_memberInfo).GetValueOptimized(context);
-#else
-                return ((FieldInfo)_memberInfo).GetValue(context);
-#endif
+                if (PlatformUtility.supportsJit)
+                    return ((FieldInfo)_memberInfo).GetValueOptimized(context);
+                else
+                    return ((FieldInfo)_memberInfo).GetValue(context);
             }
         }
     }
