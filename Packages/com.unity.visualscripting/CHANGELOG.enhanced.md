@@ -8,43 +8,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-### Changed
-
-- **Monorepo:** package lives in [uvs-benchmark](https://github.com/miramocha/uvs-benchmark) at `Packages/com.unity.visualscripting/`. Git UPM installs use `?path=/Packages/com.unity.visualscripting` with `#stable`, `#enhanced`, or release tags.
-
-
-## [1.9.11-enhanced.4] - 2026-07-10
-
-Synced from [uvs-community-performance-optimization](https://github.com/miramocha/uvs-community-performance-optimization) `enhanced` at `f0e3d7c` (PRs #26-#28).
-
-### Added
-
-- **Compiled member units** (CompiledMemberUnit) and editor settings to compile **MemberUnit** graphs for faster subgraph and member invocation ([#26](https://github.com/miramocha/uvs-community-performance-optimization/pull/26), [#27](https://github.com/miramocha/uvs-community-performance-optimization/pull/27)).
-- **ParameterValue** object registry (ParameterValueObjectRegistry, Mono/IL2CPP split) to cap registry growth and reduce allocations ([#28](https://github.com/miramocha/uvs-community-performance-optimization/pull/28)).
-
-### Changed
-
-- **ForEach** iteration and collection control-flow hot paths ([#28](https://github.com/miramocha/uvs-community-performance-optimization/pull/28)).
-- **Flow**, **GraphPointer**, **EventBus**, **ValueInput** / port wiring, **InvokeMember** / **MemberUnit**, static reflection invokers (function-pointer paths), and **SubgraphUnit** nesting ([#26](https://github.com/miramocha/uvs-community-performance-optimization/pull/26), [#27](https://github.com/miramocha/uvs-community-performance-optimization/pull/27)).
-- Editor: **FlowCanvas**, **UnitWidget**, **MemberUnitDescriptor**, and **BoltFlowConfiguration** for compiled-member workflow ([#26](https://github.com/miramocha/uvs-community-performance-optimization/pull/26)).
-## [1.9.11-enhanced.3] - 2026-05-29
-
-Synced from [uvs-community-performance-optimization](https://github.com/miramocha/uvs-community-performance-optimization) `enhanced` at `a55fb1c` (PRs #22ΓÇô#25).
-
-### Added
-
-- **Optimized constructors**: arity-specific `ConstructorInvoker_0`ΓÇô`5`, shared bases, and `ConstructorReflectionInvoker` fallback; wired through `OptimizedReflection` and member/variable paths ([#24](https://github.com/miramocha/uvs-community-performance-optimization/pull/24), [#25](https://github.com/miramocha/uvs-community-performance-optimization/pull/25)).
-- **Flow debugging** for **On Start** and **On Enable** lifecycle units ([#23](https://github.com/miramocha/uvs-community-performance-optimization/pull/23)).
-
-### Changed
-
-- **Flow** runtime hot paths, **CustomEvent** / **EventUnit**, control units (**Sequence**, **Select**, **Switch**), and **ReflectionInvoker** refactored for fewer allocations ([#24](https://github.com/miramocha/uvs-community-performance-optimization/pull/24)).
-- **`System.Runtime.CompilerServices.Unsafe`** plugin moved under `Runtime/VisualScripting.Core/Plugins/` (Flow asmdef no longer references it directly).
-
-### Fixed
-
-- **Custom events** and **CodeGeneratorValueUtility** compile/runtime issues ([#22](https://github.com/miramocha/uvs-community-performance-optimization/pull/22)).
-
 ## [1.9.11-enhanced.2] - 2026-05-20
 
 Correctness fixes, C# Generator fixes, and repository/docs updates since [1.9.11-enhanced.1](https://github.com/miramocha/uvs-community-performance-optimization/releases/tag/v1.9.11-enhanced.1).
@@ -59,7 +22,7 @@ Correctness fixes, C# Generator fixes, and repository/docs updates since [1.9.11
 
 - **Issue #9 correctness** ([#16](https://github.com/miramocha/uvs-community-performance-optimization/pull/16)): `SetMember` chainable target, graph lifecycle manager listener registration leaks, teardown `Unregister` path, `ForEach` type-mismatch warnings, `Machine.UseCompiledGraph` edge cases.
 - **C# Generator**: `CodeGeneratorValueUtility` and Humility value root compile errors ([#17](https://github.com/miramocha/uvs-community-performance-optimization/pull/17)).
-- **UPM import**: `CHANGELOG.enhanced.md.meta` ΓÇö removes immutable-folder ΓÇ£no meta fileΓÇ¥ warning ([#18](https://github.com/miramocha/uvs-community-performance-optimization/pull/18)).
+- **UPM import**: `CHANGELOG.enhanced.md.meta` — removes immutable-folder “no meta file” warning ([#18](https://github.com/miramocha/uvs-community-performance-optimization/pull/18)).
 
 ### Removed
 
@@ -76,7 +39,7 @@ First tagged release of the enhanced fork on branch `enhanced`.
 - **C# Generator** (editor): compile script graphs and enum assets to C#, with live preview window, asset compilers, and per-node generators for control flow, collections, math, logic, events, members, variables, time, NCalc, and related nodes.
 - **On Awake** lifecycle event unit (*Events/Lifecycle*).
 - **Graph lifecycle managers** (`GraphUpdateManager`, `GraphFixedUpdateManager`, `GraphLateUpdateManager`) to batch `Update`, `FixedUpdate`, and `LateUpdate` for registered event machines.
-- **Struct-optimized reflection invokers** and accessors (`StructInstance*` paths, 0ΓÇô5 arity) alongside existing instance/static optimized paths.
+- **Struct-optimized reflection invokers** and accessors (`StructInstance*` paths, 0–5 arity) alongside existing instance/static optimized paths.
 - **Shared editor utilities**: graph traversal, stack-trace handling, extended machine inspection.
 - **Repository docs**: [README.md](README.md) fork install guide (`#enhanced`, `#stable`, embedded package); [CONTRIBUTING.md](CONTRIBUTING.md) branch model; GitHub ruleset payloads for PR-only `enhanced` and `stable` branches.
 - **Runtime plugin**: `System.Runtime.CompilerServices.Unsafe.dll` under `Runtime/Plugins/` (see [Third Party Notices.md](Third%20Party%20Notices.md)).
@@ -94,7 +57,7 @@ First tagged release of the enhanced fork on branch `enhanced`.
 ### Fixed
 
 - Compile errors and obsolete warnings related to `Unsafe` usage and generator utilities.
-- **Type ΓåÆ Object** conversion on optimized reflection invoke paths.
+- **Type → Object** conversion on optimized reflection invoke paths.
 - Reduced unnecessary `Unsafe` intrinsics in `Member`, `ParameterValue`, and `Flow` while retaining the bundled DLL where needed.
 - Minor editor widget fix (`ValueConnectionWidget`).
 
