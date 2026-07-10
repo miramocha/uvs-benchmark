@@ -173,7 +173,7 @@ namespace Unity.VisualScripting
         /// </summary>
         Vector2 position { get; set; }
 
-        string GetElementStackTrace(GraphReference reference, Unit unit, string pathPrefix);
+        string GetElementStackTrace(GraphReference reference, IUnitPort from, IUnitPort to, string pathPrefix = "/");
 
         #endregion
     }

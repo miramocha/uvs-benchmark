@@ -26,6 +26,7 @@ namespace Unity.VisualScripting
         [Serialize]
         public string name { get; private set; }
 
+        [DoNotSerialize]
         private object _value;
 
         [SerializeAs(nameof(value)), Value]
@@ -117,7 +118,7 @@ namespace Unity.VisualScripting
         /// </summary>
         public static object UpdateBoxedValue(object existingBox, ParameterValue newValue)
         {
-            if (existingBox == null || newValue.usesObjectID)
+            if (existingBox == null || newValue.UsesObjectID)
             {
                 return newValue.ObjectValue;
             }

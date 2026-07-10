@@ -84,26 +84,20 @@ namespace Unity.VisualScripting
             Succession(enter, exit);
         }
 
-        private ControlOutput Trigger(Flow flow)
+        private unsafe ControlOutput Trigger(Flow flow)
         {
             var target = flow.GetValue<GameObject>(this.target);
             var name = flow.GetValue<string>(this.name);
+            int count = argumentCount;
 
-            var values = new NativeArray<ParameterValue>(argumentCount, Allocator.Temp);
-
-            try
+            ParameterValue* buffer = stackalloc ParameterValue[count];
+            
+            for (int i = 0; i < count; i++)
             {
-                for (int i = 0; i < argumentCount; i++)
-                {
-                    values[i] = flow.GetValueData(arguments[i]);
-                }
+                buffer[i] = flow.GetValueData(arguments[i]);
+            }
 
-                CustomEvent.Trigger(target, name, values, flow.useDebugFlow);
-            }
-            finally
-            {
-                values.Dispose();
-            }
+            CustomEvent.Trigger(target, name, buffer, count);
 
             return exit;
         }

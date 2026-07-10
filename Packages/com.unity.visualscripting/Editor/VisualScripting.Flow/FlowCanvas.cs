@@ -179,9 +179,82 @@ namespace Unity.VisualScripting
         {
             yield return new DropdownOption((Action<Vector2>)(NewUnit), "Add Node...");
             yield return new DropdownOption((Action<Vector2>)(NewSticky), "Create Sticky Note");
+
             foreach (var baseOption in base.GetContextOptions())
             {
                 yield return baseOption;
+            }
+
+            var selectedMemberUnits = selection.OfType<MemberUnit>().ToList();
+            if (selectedMemberUnits.Count > 0)
+            {
+                if (selectedMemberUnits.Any(mu => !mu.IsCompiled))
+                {
+                    string label = selectedMemberUnits.Count == 1 ? "Optimize Node" : "Optimize Selected Nodes";
+                    yield return new DropdownOption((Action<Vector2>)OptimizeSelectedMemberUnits, label);
+                }
+                else
+                {
+                    string label = selectedMemberUnits.Count == 1 ? "Switch to Optimized Node" : "Switch Selected to Optimized Nodes";
+                    yield return new DropdownOption((Action<Vector2>)UseCompiledSelectedMemberUnits, label);
+                }
+            }
+        }
+
+        private void OptimizeSelectedMemberUnits(Vector2 pos)
+        {
+            var selectedMemberUnits = selection.OfType<MemberUnit>().ToList();
+            if (selectedMemberUnits.Count == 0) return;
+
+            var uncompiledUnits = selectedMemberUnits.Where(mu => !mu.IsCompiled).ToList();
+            var alreadyCompiledUnits = selectedMemberUnits.Where(mu => mu.IsCompiled).ToList();
+
+            string title = selectedMemberUnits.Count == 1 ? "Optimize Node" : $"Optimize {selectedMemberUnits.Count} Nodes";
+
+            if (selectedMemberUnits.Count > 1)
+            {
+                bool proceed = EditorUtility.DisplayDialog(title,
+                $"This will generate scripts for {uncompiledUnits.Count} nodes and replace all {selectedMemberUnits.Count} selected nodes once compilation completes.",
+                "Optimize", "Cancel");
+
+                if (!proceed) return;
+            }
+
+            if (alreadyCompiledUnits.Count > 0)
+            {
+                foreach (var mu in alreadyCompiledUnits)
+                {
+                    Type compiledType = Type.GetType(mu.CompiledTypeName);
+                    if (compiledType != null)
+                    {
+                        UnitWidgetHelper.ReplaceMemberUnitUnit(mu, compiledType, context, selection);
+                    }
+                }
+            }
+
+            if (uncompiledUnits.Count > 0)
+            {
+                MemberUnitCompiler.CompileAndReplaceBatch(uncompiledUnits);
+            }
+        }
+
+        private void UseCompiledSelectedMemberUnits(Vector2 pos)
+        {
+            var selectedMemberUnits = selection.OfType<MemberUnit>().ToList();
+
+            foreach (var memberUnit in selectedMemberUnits)
+            {
+                if (memberUnit == null) continue;
+
+                Type compiledType = Type.GetType(memberUnit.CompiledTypeName);
+                if (compiledType != null)
+                {
+                    UnitWidgetHelper.ReplaceMemberUnitUnit(memberUnit, compiledType, context, selection);
+                }
+                else
+                {
+                    Debug.LogError($"[MemberUnit] Type look up failed for expected node configuration: {memberUnit.CompiledTypeName}");
+                }
             }
         }
 

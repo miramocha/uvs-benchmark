@@ -438,19 +438,23 @@ namespace Unity.VisualScripting
                 return null;
             }
 
-            if (type == typeof(GameObject) && value is Component)
+            if (type == typeof(GameObject) && value is Component C)
             {
-                return ((Component)value).gameObject;
+                return C.gameObject;
             }
             else if (typeof(Component).IsAssignableFrom(type) || type.IsInterface)
             {
-                if (value is Component)
+                if (value is Component component)
                 {
-                    return ((Component)value).GetComponent(type);
+                    if (type == typeof(Transform))
+                        return component.transform;
+                    return component.GetComponent(type);
                 }
-                else if (value is GameObject)
+                else if (value is GameObject gameObject)
                 {
-                    return ((GameObject)value).GetComponent(type);
+                    if (type == typeof(Transform))
+                        return gameObject.transform;
+                    return gameObject.GetComponent(type);
                 }
             }
 

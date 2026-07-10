@@ -68,7 +68,39 @@ namespace Unity.VisualScripting
         [EditorPref]
         public bool skipContextMenu { get; set; } = false;
 
+        public const string FlowDebuggingTooltip =
+        @"Controls whether the graph window highlights active nodes and displays live data values.
+
+• Enabled: Displays all live data and highlights. This can cause a noticeable performance drop.
+• Enabled When Visible: Only captures data while the Graph window is open. When the window is hidden, performance is more optimized, but early startup events (like OnStart) won't show data if the window was not open when they triggered.
+• Disabled: Maximum performance. Value Connections will not show values, and nodes will not glow blue.
+
+Note: This feature is entirely stripped out of standalone builds, ensuring zero impact on your final game's performance.";
+
+        /// <summary>
+        /// Determines whether flow execution information is displayed in the Graph window.
+        /// </summary>
+        /// <remarks>
+        /// Enabling this feature introduces significant performance overhead but is highly useful for debugging. 
+        /// When disabled, value connections will not display live data, and nodes will not turn blue when triggered.
+        /// <para>
+        /// If set to <c>EnabledWhenVisible</c>, flow data is only captured while the Graph window is open. 
+        /// Any execution that occurs while the window is hidden will not be tracked or displayed. Values are commonly hidden with OnStart and similar Events when this setting is enabled.
+        /// </para>
+        /// <para><strong>Note:</strong> This feature is completely disabled in builds.</para>
+        /// </remarks>
+        [ProjectSetting(visible = false, resettable = true)]
+        [InspectorLabel("Flow Debugging", FlowDebuggingTooltip)]
+        public Flow.FlowDebuggingMode flowDebugging { get; set; } = Flow.FlowDebuggingMode.Enabled;
+
         [ProjectSetting(visible = false, resettable = false)]
         public HashSet<string> favoriteUnitOptions { get; set; } = new HashSet<string>();
+
+        public override void LateInitialize()
+        {
+            base.LateInitialize();
+
+            Flow.debuggingMode = flowDebugging;
+        }
     }
 }

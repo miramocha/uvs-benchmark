@@ -5,11 +5,18 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace Unity.VisualScripting
 {
     public sealed class Flow : IPoolable, IDisposable
     {
+        public enum FlowDebuggingMode
+        {
+            Enabled = 0,
+            EnabledWhenVisible = 1,
+            Disabled = 2
+        }
         // We need to check for recursion by passing some additional
         // context information to avoid the same port in multiple different
         // nested flow graphs to count as the same item. Naively,
@@ -25,20 +32,16 @@ namespace Unity.VisualScripting
             public readonly IGraphParent context;
             private readonly int _hash;
 
-            public RecursionNode(IUnitPort port, GraphPointer pointer)
+            public RecursionNode(IUnitPort port, GraphPointer context)
             {
                 this.port = port;
-                this.context = pointer.parent;
+                this.context = context.parent;
 
-                unchecked
-                {
-                    int h1 = port?.GetHashCode() ?? 0;
-                    int h2 = context?.GetHashCode() ?? 0;
-                    _hash = h1 ^ (h2 << 5) + h2;
-                }
+                _hash = HashCode.Combine(
+                    RuntimeHelpers.GetHashCode(this.port),
+                    RuntimeHelpers.GetHashCode(this.context));
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Equals(RecursionNode other)
             {
                 return ReferenceEquals(port, other.port) && ReferenceEquals(context, other.context);
@@ -46,14 +49,14 @@ namespace Unity.VisualScripting
 
             public override bool Equals(object obj) => obj is RecursionNode other && Equals(other);
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public override int GetHashCode() => _hash;
         }
 
-        public GraphStack stack { get; private set; }
+        private GraphStack _stack;
+        public GraphStack stack => _stack;
 
         private Recursion<RecursionNode> recursion;
-        
+
         private sealed class PortDictionary
         {
             [StructLayout(LayoutKind.Sequential)]
@@ -65,6 +68,7 @@ namespace Unity.VisualScripting
 
             private Entry[] _entries;
             private int _mask;
+            private int _shift;
             private int _count;
             private int _resizeAmount;
 
@@ -76,46 +80,59 @@ namespace Unity.VisualScripting
                 _entries = new Entry[size];
                 _mask = size - 1;
                 _resizeAmount = (size >> 1) + (size >> 2);
+
+                int shift = 32;
+                int temp = _mask;
+                while (temp > 0)
+                {
+                    shift--;
+                    temp >>= 1;
+                }
+                _shift = shift;
             }
 
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             public bool Contains(IUnitValuePort key)
             {
                 var entries = _entries;
                 int m = _mask;
-                int hash = (int)((uint)RuntimeHelpers.GetHashCode(key) * 2654435769u);
-                int index = hash & m;
+                uint hash = (uint)RuntimeHelpers.GetHashCode(key) * 2654435769u;
+                int index = (int)(hash >> _shift) & m;
 
-                IUnitValuePort k = entries[index].Key;
-
-                while (k != null)
+                while (true)
                 {
-                    if (ReferenceEquals(k, key)) return true;
+                    ref Entry entry = ref entries[index];
+                    if (entry.Key == null) break;
+
+                    if (ReferenceEquals(entry.Key, key))
+                    {
+                        return true;
+                    }
+
                     index = (index + 1) & m;
-                    k = entries[index].Key;
                 }
+
                 return false;
             }
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            
             public bool TryGetValue(IUnitValuePort key, out ParameterValue value)
             {
                 var entries = _entries;
                 int m = _mask;
-                int hash = (int)((uint)RuntimeHelpers.GetHashCode(key) * 2654435769u);
-                int index = hash & m;
+                uint hash = (uint)RuntimeHelpers.GetHashCode(key) * 2654435769u;
+                int index = (int)(hash >> _shift) & m;
 
-                IUnitValuePort k = entries[index].Key;
-
-                while (k != null)
+                while (true)
                 {
-                    if (ReferenceEquals(k, key))
+                    ref Entry entry = ref entries[index];
+                    if (entry.Key == null) break;
+
+                    if (ReferenceEquals(entry.Key, key))
                     {
-                        value = entries[index].Value;
+                        value = entry.Value;
                         return true;
                     }
+
                     index = (index + 1) & m;
-                    k = entries[index].Key;
                 }
 
                 value = default;
@@ -125,69 +142,91 @@ namespace Unity.VisualScripting
             public ref ParameterValue GetValueRefOrAdd(IUnitValuePort key, out bool exists)
             {
                 var entries = _entries;
+                int m = _mask;
+                uint hash = (uint)RuntimeHelpers.GetHashCode(key) * 2654435769u;
+                int i = (int)(hash >> _shift) & m;
+
+                while (true)
+                {
+                    ref Entry entry = ref entries[i];
+                    if (entry.Key == null) break;
+
+                    if (ReferenceEquals(entry.Key, key))
+                    {
+                        exists = true;
+                        return ref entry.Value;
+                    }
+
+                    i = (i + 1) & m;
+                }
 
                 if (_count >= _resizeAmount)
                 {
                     Resize();
+
                     entries = _entries;
-                }
+                    m = _mask;
+                    i = (int)(hash >> _shift) & m;
 
-                int m = _mask;
-                int hash = (int)((uint)RuntimeHelpers.GetHashCode(key) * 2654435769u);
-                int i = hash & m;
-
-                IUnitValuePort k = entries[i].Key;
-                while (k != null)
-                {
-                    if (ReferenceEquals(k, key))
+                    while (entries[i].Key != null)
                     {
-                        exists = true;
-                        return ref entries[i].Value;
+                        i = (i + 1) & m;
                     }
-                    i = (i + 1) & m;
-                    k = entries[i].Key;
                 }
+
+                key.CacheValue();
 
                 exists = false;
-                entries[i].Key = key;
                 _count++;
-                return ref entries[i].Value;
+
+                ref Entry newEntry = ref entries[i];
+                newEntry.Key = key;
+                return ref newEntry.Value;
             }
 
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void Set(IUnitValuePort key, ParameterValue value)
+            public void Set(IUnitValuePort key, in ParameterValue value)
             {
                 ref var entryValue = ref GetValueRefOrAdd(key, out _);
                 entryValue = value;
             }
 
+            [MethodImpl(MethodImplOptions.NoInlining)]
             private void Resize()
             {
                 var oldEntries = _entries;
                 int newSize = oldEntries.Length * 2;
 
-                _entries = new Entry[newSize];
-                _mask = newSize - 1;
-                _count = 0;
-                _resizeAmount = (newSize >> 1) + (newSize >> 2);
+                var newEntries = new Entry[newSize];
+                int newMask = newSize - 1;
+
+                int newShift = 32;
+                int temp = newMask;
+                while (temp > 0) { newShift--; temp >>= 1; }
 
                 for (int i = 0; i < oldEntries.Length; i++)
                 {
                     var key = oldEntries[i].Key;
                     if (key != null)
                     {
-                        int hash = (int)((uint)RuntimeHelpers.GetHashCode(key) * 2654435769u);
-                        int idx = hash & _mask;
-                        while (_entries[idx].Key != null)
+                        uint hash = (uint)RuntimeHelpers.GetHashCode(key) * 2654435769u;
+                        int idx = (int)(hash >> newShift) & newMask;
+
+                        while (newEntries[idx].Key != null)
                         {
-                            idx = (idx + 1) & _mask;
+                            idx = (idx + 1) & newMask;
                         }
 
-                        _entries[idx].Key = key;
-                        _entries[idx].Value = oldEntries[i].Value;
-                        _count++;
+                        ref Entry targetEntry = ref newEntries[idx];
+                        targetEntry.Key = key;
+                        targetEntry.Value = oldEntries[i].Value;
                     }
                 }
+
+                _entries = newEntries;
+                _mask = newMask;
+                _shift = newShift;
+                _resizeAmount = (newSize >> 1) + (newSize >> 2);
             }
 
             public void Clear()
@@ -202,7 +241,7 @@ namespace Unity.VisualScripting
 
         private readonly PortDictionary locals = new PortDictionary(64);
 
-        private readonly List<int> usedIDs = new List<int>(64);
+        private readonly HashSet<int> usedIDs = new HashSet<int>(64);
         public readonly VariableDeclarations variables = new VariableDeclarations();
 
         private readonly Stack<int> loops = new Stack<int>();
@@ -221,12 +260,14 @@ namespace Unity.VisualScripting
 
         public bool isPrediction { get; private set; }
 
-        public bool useDebugFlow;
+        public static FlowDebuggingMode debuggingMode;
 
         private bool disposed;
+
 #if UNITY_EDITOR
         private int stackDepth;
 #endif
+
         public bool enableDebug
         {
             get
@@ -234,29 +275,36 @@ namespace Unity.VisualScripting
 #if !UNITY_EDITOR
                 return false;
 #else
-                if (useDebugFlow)
+                switch (debuggingMode)
                 {
-                    return true;
+                    case FlowDebuggingMode.Disabled:
+                        return false;
+
+                    case FlowDebuggingMode.Enabled:
+                        return !isPrediction && _stack.hasDebugData;
+
+                    case FlowDebuggingMode.EnabledWhenVisible:
+                        if (isPrediction || !_stack.hasDebugData)
+                            return false;
+
+                        if (stackDepth != _stack.depth)
+                        {
+                            stackDepth = _stack.depth;
+                            isInspected = isInspectedBinding?.Invoke(_stack) ?? false;
+                        }
+                        return isInspected;
+
+                    default:
+                        return false;
                 }
-
-                if (stackDepth != stack.depth)
-                {
-                    stackDepth = stack.depth;
-                    isInspected = isInspectedBinding?.Invoke(stack) ?? false;
-                }
-
-                if (!isInspected) return false;
-
-                if (isPrediction || !stack.hasDebugData) return false;
-
-                return true;
 #endif
             }
         }
 
         private bool isInspected;
-
         public static Func<GraphPointer, bool> isInspectedBinding { get; set; } = null;
+
+        private ParameterValue Self;
 
         #region Lifecycle
 
@@ -270,10 +318,17 @@ namespace Unity.VisualScripting
 
             var flow = GenericPool<Flow>.New(flowFactory);
 
-            flow.stack = reference.ToStackPooled();
+            var stack = reference.ToStackPooled();
+
+            flow._stack = stack;
+
+            flow.Self = new ParameterValue(stack.self, out int handle);
+            flow.usedIDs.Add(handle);
+
 #if UNITY_EDITOR
             flow.stackDepth = -1;
 #endif
+
             return flow;
         }
 
@@ -296,7 +351,7 @@ namespace Unity.VisualScripting
 
         void IPoolable.Free()
         {
-            stack?.Dispose();
+            _stack?.Dispose();
             recursion?.Dispose();
             loops.Clear();
             variables.Clear();
@@ -314,17 +369,14 @@ namespace Unity.VisualScripting
 
             foreach (var id in usedIDs)
             {
-                if (id != -1)
-                {
-                    ParameterValue.FreeObject(id);
-                }
+                ParameterValue.FreeObject(id);
             }
             usedIDs.Clear();
 
             locals.Clear();
 
             loopIdentifier = -1;
-            stack = null;
+            _stack = null;
             recursion = null;
             isCoroutine = false;
             coroutineEnumerator = null;
@@ -339,15 +391,14 @@ namespace Unity.VisualScripting
 
         public GraphStack PreserveStack()
         {
-            var preservedStack = stack.Clone();
+            var preservedStack = _stack.Clone();
             preservedStacks.Add(preservedStack);
             return preservedStack;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void RestoreStack(GraphStack stack)
         {
-            this.stack.CopyFrom(stack, false);
+            _stack.CopyFrom(stack, false);
         }
 
         public void DisposePreservedStack(GraphStack stack)
@@ -360,26 +411,13 @@ namespace Unity.VisualScripting
         #region Loops
         public int loopIdentifier = -1;
 
-        public int currentLoop
-        {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
-            {
-                if (loops.Count > 0)
-                {
-                    return loops.Peek();
-                }
-                else
-                {
-                    return -1;
-                }
-            }
-        }
+        private int _currentLoop = -1;
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int currentLoop => _currentLoop;
+
         public bool LoopIsNotBroken(int loop)
         {
-            return currentLoop == loop;
+            return _currentLoop == loop;
         }
 
         public int EnterLoop()
@@ -388,28 +426,34 @@ namespace Unity.VisualScripting
 
             loops.Push(loop);
 
+            _currentLoop = loop;
+
             return loop;
         }
 
         public void BreakLoop()
         {
-            if (currentLoop < 0)
+            if (_currentLoop < 0)
             {
                 throw new InvalidOperationException("No active loop to break.");
             }
 
             loops.Pop();
+
+            _currentLoop = loops.Count > 0 ? loops.Peek() : -1;
         }
 
         public void ExitLoop(int loop)
         {
-            if (loop != currentLoop)
+            if (loop != _currentLoop)
             {
                 // Already exited through break
                 return;
             }
 
             loops.Pop();
+
+            _currentLoop = loops.Count > 0 ? loops.Peek() : -1;
         }
 
         #endregion
@@ -421,11 +465,18 @@ namespace Unity.VisualScripting
         {
             try
             {
+#if ENABLE_UVS_PROFILING
+                var marker = port.ProfilerMarker;
+                marker.Begin(_stack.rootObject);
                 Invoke(port);
+                marker.End();
+#else
+                Invoke(port);
+#endif
             }
             catch (Exception ex)
             {
-                HandleException(ex, port.unit);
+                HandleException(ex, null, port);
                 throw;
             }
             finally
@@ -438,7 +489,7 @@ namespace Unity.VisualScripting
         {
             isCoroutine = true;
 
-            coroutineRunner = stack.component;
+            coroutineRunner = _stack.component;
 
             if (coroutineRunner == null)
             {
@@ -451,9 +502,20 @@ namespace Unity.VisualScripting
 
             // We have to store the enumerator because Coroutine itself
             // can't be cast to IDisposable, which we'll need when stopping.
+#if ENABLE_UVS_PROFILING
+            var marker = port.ProfilerMarker;
+            marker.Begin(_stack.rootObject);
+
             coroutineEnumerator = Coroutine(port);
 
             coroutineRunner.StartCoroutine(coroutineEnumerator);
+
+            marker.End();
+#else
+            coroutineEnumerator = Coroutine(port);
+
+            coroutineRunner.StartCoroutine(coroutineEnumerator);
+#endif
         }
 
         public void StopCoroutine(bool disposeInstantly)
@@ -518,26 +580,31 @@ namespace Unity.VisualScripting
             }
         }
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public void Invoke(ControlOutput output)
         {
-            Ensure.That(nameof(output)).IsNotNull(output);
+            if (output == null) ThrowArgumentNull(nameof(output));
 
             var input = output.connectedControlInput;
-
             if (input == null) return;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            var recursionNode = new RecursionNode(output, stack);
+#if ENABLE_UVS_PROFILING
+            var marker = input.ProfilerMarker;
+            marker.Begin(_stack.rootObject);
 
+            try
+            {
+#endif
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var recursionNode = new RecursionNode(output, _stack);
             BeforeInvoke(output, recursionNode);
 
             try
             {
                 if (input.requiresCoroutine)
-                    throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
+                    ThrowCoroutineException(input);
 
                 var nextPort = input.action(this);
-
                 if (nextPort != null)
                 {
                     Invoke(nextPort);
@@ -545,7 +612,7 @@ namespace Unity.VisualScripting
             }
             catch (Exception ex)
             {
-                HandleException(ex, input.unit);
+                HandleException(ex, output, input);
                 throw;
             }
             finally
@@ -553,13 +620,14 @@ namespace Unity.VisualScripting
                 AfterInvoke(recursionNode);
             }
 #else
+            if (input == null) return;
+
             try
             {
                 if (input.requiresCoroutine)
-                    throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
+                    ThrowCoroutineException(input);
 
                 var nextPort = input.action(this);
-
                 if (nextPort != null)
                 {
                     Invoke(nextPort);
@@ -567,137 +635,158 @@ namespace Unity.VisualScripting
             }
             catch (Exception ex)
             {
-                HandleException(ex, input.unit);
+                HandleException(ex, output, input);
                 throw;
             }
 #endif
-        }
-
-        private IEnumerable InvokeCoroutine(ControlOutput output)
-        {
-            Ensure.That(nameof(output)).IsNotNull(output);
-
-            ControlInput input = output.connectedControlInput;
-
-            if (input == null) yield break;
-
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            var recursionNode = new RecursionNode(output, stack);
-
-            BeforeInvoke(output, recursionNode);
-
-            if (input.supportsCoroutine)
-            {
-                IEnumerable instructions;
-
-                try
-                {
-                    instructions = InvokeCoroutineDelegate(input);
-                }
-                catch (Exception ex)
-                {
-                    HandleException(ex, input.unit);
-                    AfterInvoke(recursionNode);
-                    throw;
-                }
-
-                foreach (var instruction in instructions)
-                {
-                    if (instruction is ControlOutput)
-                    {
-                        foreach (var unwrappedInstruction in InvokeCoroutine((ControlOutput)instruction))
-                        {
-                            yield return unwrappedInstruction;
-                        }
-                    }
-                    else
-                    {
-                        yield return instruction;
-                    }
-                }
+#if ENABLE_UVS_PROFILING
             }
-            else
+            finally
             {
-                ControlOutput nextPort;
-
-                try
-                {
-                    if (input.requiresCoroutine)
-                        throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
-
-                    nextPort = input.action(this);
-                }
-                catch (Exception ex)
-                {
-                    HandleException(ex, input.unit);
-                    AfterInvoke(recursionNode);
-                    throw;
-                }
-
-                if (nextPort != null)
-                {
-                    foreach (var instruction in InvokeCoroutine(nextPort))
-                    {
-                        yield return instruction;
-                    }
-                }
-            }
-
-            AfterInvoke(recursionNode);
-#else
-            if (input.supportsCoroutine)
-            {
-                IEnumerable instructions;
-                try
-                {
-                    instructions = InvokeCoroutineDelegate(input);
-                }
-                catch (Exception ex)
-                {
-                    HandleException(ex, input.unit);
-                    throw;
-                }
-                foreach (var instruction in instructions)
-                {
-                    if (instruction is ControlOutput)
-                    {
-                        foreach (var unwrappedInstruction in InvokeCoroutine((ControlOutput)instruction))
-                        {
-                            yield return unwrappedInstruction;
-                        }
-                    }
-                    else
-                    {
-                        yield return instruction;
-                    }
-                }
-            }
-            else
-            {
-                ControlOutput nextPort;
-                try
-                {
-                    if (input.requiresCoroutine)
-                        throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
-                    nextPort = input.action(this);
-                }
-                catch (Exception ex)
-                {
-                    HandleException(ex, input.unit);
-                    throw;
-                }
-                if (nextPort != null)
-                {
-                    foreach (var instruction in InvokeCoroutine(nextPort))
-                    {
-                        yield return instruction;
-                    }
-                }
+                marker.End();
             }
 #endif
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowArgumentNull(string paramName)
+        {
+            throw new ArgumentNullException(paramName);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void ThrowCoroutineException(ControlInput input)
+        {
+            throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private IEnumerable InvokeCoroutine(ControlOutput output)
+        {
+            Ensure.That(nameof(output)).IsNotNull(output);
+
+            ControlInput input = output.connectedControlInput;
+            if (input == null) yield break;
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var recursionNode = new RecursionNode(output, _stack);
+            BeforeInvoke(output, recursionNode);
+#endif
+
+#if ENABLE_UVS_PROFILING
+            var marker = input.ProfilerMarker;
+            var context = _stack.rootObject;
+            marker.Begin(context);
+            bool isMarkerOpen = true;
+            try
+            {
+#endif
+            if (input.supportsCoroutine)
+            {
+                IEnumerable instructions;
+                try
+                {
+                    instructions = InvokeCoroutineDelegate(input);
+                }
+                catch (Exception ex)
+                {
+                    HandleException(ex, output, input);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    AfterInvoke(recursionNode);
+#endif
+                    throw;
+                }
+
+                foreach (var instruction in instructions)
+                {
+                    if (instruction is ControlOutput controlOutput)
+                    {
+                        foreach (var unwrappedInstruction in InvokeCoroutine(controlOutput))
+                        {
+#if ENABLE_UVS_PROFILING
+                                if (isMarkerOpen)
+                                {
+                                    marker.End();
+                                    isMarkerOpen = false;
+                                }
+#endif
+                            yield return unwrappedInstruction;
+                        }
+
+#if ENABLE_UVS_PROFILING
+                            if (!isMarkerOpen)
+                            {
+                                marker.Begin(context);
+                                isMarkerOpen = true;
+                            }
+#endif
+                    }
+                    else
+                    {
+#if ENABLE_UVS_PROFILING
+                            if (isMarkerOpen)
+                            {
+                                marker.End(); isMarkerOpen = false;
+                            }
+                            yield return instruction;
+                            marker.Begin(context);
+                            isMarkerOpen = true;
+#else
+                        yield return instruction;
+#endif
+                    }
+                }
+            }
+            else
+            {
+                ControlOutput nextPort;
+                try
+                {
+                    if (input.requiresCoroutine)
+                        ThrowCoroutineException(input);
+
+                    nextPort = input.action(this);
+                }
+                catch (Exception ex)
+                {
+                    HandleException(ex, output, input);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    AfterInvoke(recursionNode);
+#endif
+                    throw;
+                }
+
+                if (nextPort != null)
+                {
+                    foreach (var instruction in InvokeCoroutine(nextPort))
+                    {
+#if ENABLE_UVS_PROFILING
+                            if (isMarkerOpen)
+                            {
+                                marker.End();
+                                isMarkerOpen = false;
+                            }
+#endif
+                        yield return instruction;
+                    }
+                }
+            }
+#if ENABLE_UVS_PROFILING
+            }
+            finally
+            {
+                if (isMarkerOpen)
+                {
+                    marker.End();
+                }
+            }
+#endif
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            AfterInvoke(recursionNode);
+#endif
+        }
+
         private RecursionNode BeforeInvoke(ControlOutput output, RecursionNode recursionNode)
         {
             try
@@ -706,7 +795,8 @@ namespace Unity.VisualScripting
             }
             catch (StackOverflowException ex)
             {
-                HandleException(ex, output.unit);
+                var input = output.connectedControlInput;
+                HandleException(ex, output, input);
                 throw;
             }
 
@@ -716,8 +806,8 @@ namespace Unity.VisualScripting
                 var connection = output.connection;
                 var input = output.connectedControlInput;
 
-                var connectionEditorData = stack.GetElementDebugData<IUnitConnectionDebugData>(connection);
-                var inputUnitEditorData = stack.GetElementDebugData<IUnitDebugData>(input.unit);
+                var connectionEditorData = _stack.GetElementDebugData<IUnitConnectionDebugData>(connection);
+                var inputUnitEditorData = _stack.GetElementDebugData<IUnitDebugData>(input.unit);
 
                 connectionEditorData.lastInvokeFrame = EditorTimeBinding.frame;
                 connectionEditorData.lastInvokeTime = EditorTimeBinding.time;
@@ -729,7 +819,6 @@ namespace Unity.VisualScripting
             return recursionNode;
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void AfterInvoke(RecursionNode recursionNode)
         {
             recursion?.Exit(recursionNode);
@@ -737,16 +826,20 @@ namespace Unity.VisualScripting
 
         private static readonly FieldInfo StackTraceField = typeof(Exception).GetField("_stackTraceString", BindingFlags.Instance | BindingFlags.NonPublic);
 
-        private void HandleException(Exception ex, IUnit unit)
+        private const string VisualScriptingStackTraceHeader = "\n---VisualScripting Nodes Trace---\n";
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void HandleException(Exception ex, IUnitPort from, IUnitPort to)
         {
+            var unit = to.unit;
             var stackTrace = ex.StackTrace;
 
-            if (stackTrace.IndexOf("---VisualScripting Nodes Trace---") == -1)
+            if (stackTrace.IndexOf(VisualScriptingStackTraceHeader) == -1)
             {
-                stackTrace += "\n---VisualScripting Nodes Trace---";
+                stackTrace += VisualScriptingStackTraceHeader;
             }
-            StackTraceField.SetValueOptimized(ex, stackTrace + "\n" + unit.GetElementStackTrace(stack.AsReference(), unit as Unit, "/"));
-            unit.HandleException(stack, ex);
+            StackTraceField.SetValueOptimized(ex, stackTrace + "\n" + unit.GetElementStackTrace(_stack.AsReference(), from, to, "/"));
+            unit.HandleException(_stack, ex);
         }
 
         private IEnumerable InvokeCoroutineDelegate(ControlInput input)
@@ -767,7 +860,6 @@ namespace Unity.VisualScripting
                 yield return instruction;
             }
         }
-
         #endregion
 
 
@@ -805,25 +897,18 @@ namespace Unity.VisualScripting
         {
             ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
 
-            if (exists & existing.usesObjectID)
+            if (exists && existing.UsesObjectID)
             {
-                ParameterValue.UpdateObject(existing.objectID, value);
+                existing.UpdateObject(value);
 
-                if (existing.type != ParameterValue.ValueType.String)
-                {
-                    existing.SetTypeUnsafe(ParameterValue.ValueType.String);
-                }
+                existing.SetTypeUnsafe(ParameterValue.ValueType.String);
+                return;
             }
-            else
-            {
-                var parameterValue = new ParameterValue(value, out int handle);
 
-                if (handle != -1) usedIDs.Add(handle);
-
-                existing = parameterValue;
-            }
+            var parameterValue = new ParameterValue(value, out int handle);
+            usedIDs.Add(handle);
+            existing = parameterValue;
         }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, Vector2 value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -837,18 +922,15 @@ namespace Unity.VisualScripting
         public void SetValue(IUnitValuePort port, object value)
         {
             ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
-            if (exists & existing.usesObjectID)
+            if (exists && existing.UsesObjectID)
             {
-                ParameterValue.UpdateObject(existing.objectID, value);
-                if (existing.type != ParameterValue.ValueType.Object)
-                {
-                    existing.SetTypeUnsafe(ParameterValue.ValueType.Object);
-                }
+                existing.UpdateObject(value);
+                existing.SetTypeUnsafe(ParameterValue.ValueType.Object);
                 return;
             }
 
             var parameterValue = new ParameterValue(value, out int handle);
-            if (handle != -1) usedIDs.Add(handle);
+            usedIDs.Add(handle);
             existing = parameterValue;
         }
 
@@ -857,17 +939,14 @@ namespace Unity.VisualScripting
         {
             ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
 
-            if (exists)
+            if (exists && existing.UsesObjectID && value.UsesObjectID)
             {
-                if (existing.usesObjectID & value.usesObjectID)
-                {
-                    ParameterValue.UpdateObject(existing.objectID, value.ObjectValue);
-                    existing = value;
-                    return;
-                }
+                existing.UpdateObject(value.ObjectValue);
+                existing.SetTypeUnsafe(value.type);
+                return;
             }
 
-            if (value.usesObjectID)
+            if (value.UsesObjectID)
             {
                 usedIDs.Add(value.objectID);
             }
@@ -878,25 +957,48 @@ namespace Unity.VisualScripting
         [MethodImpl(MethodImplOptions.NoInlining)]
         public ParameterValue GetValueData(ValueInput input)
         {
-            if (locals.TryGetValue(input, out var local))
+            // cachedValue should only ever be true if it was used in Flow.SetValue
+            // its a hacky way to improve performance, since the cachedValue
+            // is directly on the port class it's part of it's definition so is value
+            // will be shared across subgraphs but for the most part that is fine
+            // unless the unit mixes Flow.SetValue with the Action on the same port. Then this
+            // will go back to the original logic of using TryGetValue for both ports
+            if (input.cachedValue && locals.TryGetValue(input, out var local))
                 return local;
 
             var output = input.connectedValueOutput;
             if (output != null)
             {
-                if (!locals.TryGetValue(output, out var value))
+#if ENABLE_UVS_PROFILING
+                var marker = output.ProfilerMarker;
+                marker.Begin(_stack.rootObject);
+                try
+                {
+#endif
+                // cachedValue should only ever be true if it was used in Flow.SetValue
+                if (!output.cachedValue || !locals.TryGetValue(output, out var value))
                 {
                     try
                     {
                         value = output.getValue(this);
-                        if (value.usesObjectID) usedIDs.Add(value.objectID);
-                        if (output.supportsCache) locals.Set(output, value);
+                        if (value.UsesObjectID) usedIDs.Add(value.objectID);
                     }
                     catch (Exception ex)
                     {
-                        HandleException(ex, output.unit);
+                        HandleException(ex, input, output);
                         throw;
                     }
+                }
+
+                // Supports cache will be true if ValueOutput.CacheResult is called
+                if (output.supportsCache)
+                {
+                    locals.Set(output, value);
+                    // We can set the value on the Input because the ValueOutput does not change
+                    // while the flow is running and since only 1 ValueOutput can be connected it's the same
+                    // as caching the output but now the value will be found with the first TryGetValue instead of the
+                    // second saving us from a wasted lookup.
+                    locals.Set(input, value);
                 }
 
 #if UNITY_EDITOR
@@ -906,18 +1008,31 @@ namespace Unity.VisualScripting
                 }
 #endif
                 return value;
+#if ENABLE_UVS_PROFILING
+                }
+                finally
+                {
+                    marker.End();
+                }
+#endif
             }
 
-            if (TryGetDefaultValue(input, out var defaultValue))
+            if (input.hasDefaultValue)
             {
-                var value = new ParameterValue(defaultValue, out int handle);
-                usedIDs.Add(handle);
-
-                return value;
+                if (input.DefaultValue.IsNull() && input.nullMeansSelf)
+                {
+                    return Self;
+                }
+                return input.DefaultValue;
             }
 
-            throw new MissingValuePortInputException(input.key);
+            if (input.allowsNull) return default;
+
+            return ThrowMissingValueInputPortException(input.key);
         }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ParameterValue ThrowMissingValueInputPortException(string key) => throw new MissingValuePortInputException(key);
 
 #if UNITY_EDITOR
         private void RecordDebugData(ValueInput input, ValueOutput output, ParameterValue value)
@@ -925,34 +1040,38 @@ namespace Unity.VisualScripting
             var connection = input.connection;
             if (connection != null)
             {
-                var connectionEditorData = stack.GetElementDebugData<ValueConnection.DebugData>(connection);
+                var connectionEditorData = _stack.GetElementDebugData<ValueConnection.DebugData>(connection);
                 connectionEditorData.lastInvokeFrame = EditorTimeBinding.frame;
                 connectionEditorData.lastInvokeTime = EditorTimeBinding.time;
                 connectionEditorData.assignedLastValue = true;
                 connectionEditorData.lastValue = value.ToObject();
             }
 
-            var inputUnitEditorData = stack.GetElementDebugData<IUnitDebugData>(output.unit);
+            var inputUnitEditorData = _stack.GetElementDebugData<IUnitDebugData>(output.unit);
             inputUnitEditorData.lastInvokeFrame = EditorTimeBinding.frame;
             inputUnitEditorData.lastInvokeTime = EditorTimeBinding.time;
         }
 #endif
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public object GetValue(ValueInput input)
         {
             return GetValueData(input).ToObject();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T GetValue<T>(ValueInput input)
         {
             return GetValueData(input).Cast<T>();
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public object GetValue(ValueInput input, Type type)
         {
             return ConversionUtility.Convert(GetValue(input), type);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public object GetConvertedValue(ValueInput input)
         {
             return GetValue(input, input.type);
@@ -988,7 +1107,7 @@ namespace Unity.VisualScripting
 
             if (input.nullMeansSelf && defaultValue == null)
             {
-                defaultValue = stack.self;
+                defaultValue = _stack.self;
             }
 
             return true;
@@ -1062,12 +1181,12 @@ namespace Unity.VisualScripting
                 {
                     value = output.getValue(this);
 
-                    if (value.usesObjectID)
+                    if (value.UsesObjectID)
                         usedIDs.Add(value.objectID);
                 }
                 catch (Exception ex)
                 {
-                    HandleException(ex, output.unit);
+                    HandleException(ex, input, output);
                     throw;
                 }
             }
@@ -1100,7 +1219,7 @@ namespace Unity.VisualScripting
                 return false;
             }
 
-            var recursionNode = new RecursionNode(output, stack);
+            var recursionNode = new RecursionNode(output, _stack);
 
             if (!recursion?.TryEnter(recursionNode) ?? false)
             {
@@ -1165,12 +1284,12 @@ namespace Unity.VisualScripting
                     {
                         parameterValue = output.getValue(flow);
 
-                        if (parameterValue.usesObjectID)
+                        if (parameterValue.UsesObjectID)
                             flow.usedIDs.Add(parameterValue.objectID);
                     }
                     catch (Exception ex)
                     {
-                        flow.HandleException(ex, output.unit);
+                        flow.HandleException(ex, output, null);
                         throw;
                     }
                 }

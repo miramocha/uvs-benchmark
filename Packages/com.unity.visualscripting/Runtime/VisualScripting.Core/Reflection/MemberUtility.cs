@@ -342,7 +342,7 @@ namespace Unity.VisualScripting
         {
             var type = parameterInfo.ParameterType;
 
-            return (type.IsReferenceType() && parameterInfo.HasAttribute<AllowsNullAttribute>()) || Nullable.GetUnderlyingType(type) != null;
+            return (type.IsReferenceType() && parameterInfo.HasAttribute<AllowsNullAttribute>()) || Nullable.GetUnderlyingType(type) != null || parameterInfo.IsDefined(typeof(ParamArrayAttribute), false);
         }
 
         // https://stackoverflow.com/questions/30102174/

@@ -102,7 +102,10 @@ namespace Unity.VisualScripting
             bool isStructInstance = manipulator.targetType.IsValueType && !stub.IsStatic;
 
             // Use default(T) for ParameterValue.Create to ensure correct AOT overload resolution
-            CodeExpression pvTargetDefault = new CodeDefaultValueExpression(targetType);
+            bool isStaticClass = manipulator.targetType.IsStatic();
+            CodeExpression pvTargetDefault = isStaticClass
+                ? (CodeExpression)new CodeFieldReferenceExpression(pvTypeExpression, "None")
+                : new CodeDefaultValueExpression(targetType);
 
             // Call optimized method with ParameterValue overloads
             if (!includesOutOrRef)

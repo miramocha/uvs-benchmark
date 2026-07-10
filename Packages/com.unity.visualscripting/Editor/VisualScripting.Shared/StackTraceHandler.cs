@@ -1,4 +1,6 @@
+using System;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
@@ -13,109 +15,93 @@ namespace Unity.VisualScripting
         {
             EditorGUI.hyperLinkClicked += (editorWindow, args) =>
             {
-                if (!args.hyperLinkData.ContainsKey("href")) return;
+                if (!args.hyperLinkData.TryGetValue("href", out string href)) return;
+                if (!args.hyperLinkData.TryGetValue("line", out string line)) return;
+                if (!href.Contains("VSUnit")) return;
 
-                if (!args.hyperLinkData.ContainsKey("line")) return;
+                int openingBracketIndex = line.IndexOf('[');
+                if (openingBracketIndex == -1) return;
 
-                if (!args.hyperLinkData["href"].Contains("VSUnit")) return;
+                string targetUnitString = line.Substring(0, openingBracketIndex).Replace(",", "").Trim();
 
-                string href = args.hyperLinkData["href"];
-                string line = args.hyperLinkData["line"];
+                string referenceContent = line.Substring(openingBracketIndex + 1).Replace("]", "").Trim();
 
-                string targetUnitString = line.Replace("]", "").Trim();
-
-                string wholeLine = href + line;
+                string targetGraphRefString = referenceContent.Replace(" | ", " > ");
 
                 string[] segments = href.Split('/');
-
                 if (segments.Length < 2) return;
 
                 string sceneName = segments[0];
                 string rootObjectName = segments[1];
 
                 var scene = SceneManager.GetSceneByName(sceneName);
-                if (!scene.IsValid())
-                {
-                    return;
-                }
+                if (!scene.IsValid()) return;
 
-                var rootObjects = scene.GetRootGameObjects();
                 var targets = UnityObjectUtility.FindObjectsOfTypeIncludingInactive<IMachine>().Where(machine => machine.GetReference() != null && machine.GetReference().gameObject.name == rootObjectName);
 
                 foreach (var go in targets)
                 {
-                    var graph = go.GetReference()?.graph;
-                    if (graph == null)
+                    var baseReference = go.GetReference();
+                    var graph = baseReference?.graph;
+                    if (graph == null) continue;
+
+                    var reference = baseReference.AsReference();
+
+                    if (graph is FlowGraph)
                     {
-                        continue;
-                    }
-
-                    var reference = go.GetReference().AsReference();
-
-                    if (graph is FlowGraph flowGraph)
-                    {
-                        (GraphReference reference, Unit unit) fallbackMatch = (null, null);
-
-                        foreach (var item in GraphTraversal.TraverseFlowGraph<Unit>(reference))
-                        {
-                            var currentReference = item.Item1;
-                            var unit = item.Item2;
-
-                            if (unit.ToString() == targetUnitString)
-                            {
-                                var exception = unit.GetException(currentReference);
-
-                                if (exception != null)
-                                {
-                                    NavigateToUnit(currentReference, unit, go as Object);
-                                    return;
-                                }
-
-                                if (fallbackMatch.unit == null)
-                                {
-                                    fallbackMatch = (currentReference, unit);
-                                }
-                            }
-                        }
-                        if (fallbackMatch.unit != null)
-                        {
-                            NavigateToUnit(fallbackMatch.reference, fallbackMatch.unit, go as Object);
-                        }
+                        if (TryFindAndNavigate(GraphTraversal.TraverseFlowGraph<Unit>(reference), targetUnitString, targetGraphRefString, go as UnityEngine.Object))
+                            return;
                     }
                     else
                     {
-                        (GraphReference reference, Unit unit) fallbackMatch = (null, null);
-                        foreach (var item in GraphTraversal.TraverseStateGraph<Unit>(reference))
-                        {
-                            var currentReference = item.Item1;
-                            var unit = item.Item2;
-
-                            if (unit.ToString() == targetUnitString)
-                            {
-                                var exception = unit.GetException(currentReference);
-
-                                if (exception != null)
-                                {
-                                    NavigateToUnit(currentReference, unit, go as Object);
-                                    return;
-                                }
-
-                                if (fallbackMatch.unit == null)
-                                {
-                                    fallbackMatch = (currentReference, unit);
-                                }
-                            }
-                        }
-                        if (fallbackMatch.unit != null)
-                        {
-                            NavigateToUnit(fallbackMatch.reference, fallbackMatch.unit, go as Object);
-                        }
+                        if (TryFindAndNavigate(GraphTraversal.TraverseStateGraph<Unit>(reference), targetUnitString, targetGraphRefString, go as UnityEngine.Object))
+                            return;
                     }
                 }
             };
         }
 
-        static void NavigateToUnit(GraphReference reference, Unit unit, Object go)
+        private static bool TryFindAndNavigate(System.Collections.Generic.IEnumerable<(GraphReference, Unit)> traversal, string targetUnit, string targetGraphRef, UnityEngine.Object contextObject)
+        {
+            (GraphReference reference, Unit unit) fallbackMatch = (null, null);
+
+            foreach (var item in traversal)
+            {
+                var currentReference = item.Item1;
+                var unit = item.Item2;
+
+                if (unit.ToString() == targetUnit)
+                {
+                    string currentRefString = currentReference.ToString();
+
+                    if (!string.IsNullOrEmpty(targetGraphRef) && currentRefString == targetGraphRef)
+                    {
+                        NavigateToUnit(currentReference, unit, contextObject);
+                        return true;
+                    }
+
+                    var exception = unit.GetException(currentReference);
+                    if (exception != null)
+                    {
+                        fallbackMatch = (currentReference, unit);
+                    }
+                    else if (fallbackMatch.unit == null)
+                    {
+                        fallbackMatch = (currentReference, unit);
+                    }
+                }
+            }
+
+            if (fallbackMatch.unit != null)
+            {
+                NavigateToUnit(fallbackMatch.reference, fallbackMatch.unit, contextObject);
+                return true;
+            }
+
+            return false;
+        }
+
+        static void NavigateToUnit(GraphReference reference, Unit unit, UnityEngine.Object go)
         {
             GraphWindow.OpenActive(reference);
 

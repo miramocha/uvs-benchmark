@@ -4,7 +4,7 @@ using System.Reflection;
 
 namespace Unity.VisualScripting
 {
-    public class InstancePropertyAccessor<TTarget, TProperty> : OptimizedAccessorBase
+    public sealed class InstancePropertyAccessor<TTarget, TProperty> : OptimizedAccessorBase
     {
         public InstancePropertyAccessor(PropertyInfo propertyInfo)
         {

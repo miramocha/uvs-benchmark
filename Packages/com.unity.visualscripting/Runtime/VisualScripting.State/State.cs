@@ -133,14 +133,14 @@ namespace Unity.VisualScripting
                 // http://support.ludiq.io/topics/261-event-timing-issue/
                 (transition as IGraphEventListener)?.StartListening(flow.stack);
             }
-
+#if UNITY_EDITOR
             if (flow.enableDebug)
             {
                 var editorData = flow.stack.GetElementDebugData<DebugData>(this);
 
                 editorData.lastEnterFrame = EditorTimeBinding.frame;
             }
-
+#endif
             OnEnterImplementation(flow);
 
             foreach (var transition in outgoingTransitionsNoAlloc)
@@ -169,14 +169,14 @@ namespace Unity.VisualScripting
             OnExitImplementation(flow);
 
             data.isActive = false;
-
+#if UNITY_EDITOR
             if (flow.enableDebug)
             {
                 var editorData = flow.stack.GetElementDebugData<DebugData>(this);
 
                 editorData.lastExitTime = EditorTimeBinding.time;
             }
-
+#endif
             foreach (var transition in outgoingTransitionsNoAlloc)
             {
                 try

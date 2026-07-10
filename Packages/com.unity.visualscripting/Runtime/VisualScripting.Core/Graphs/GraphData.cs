@@ -1,9 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Unity.VisualScripting
 {
+    internal sealed class GraphReferenceEqualityComparer<T> : IEqualityComparer<T> where T : class
+    {
+        public static readonly GraphReferenceEqualityComparer<T> Instance = new GraphReferenceEqualityComparer<T>();
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(T x, T y) => ReferenceEquals(x, y);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int GetHashCode(T obj) => RuntimeHelpers.GetHashCode(obj);
+    }
+
     public class GraphData<TGraph> : IGraphData
         where TGraph : class, IGraph
     {
@@ -14,17 +26,19 @@ namespace Unity.VisualScripting
 
         protected TGraph definition { get; }
 
-        protected Dictionary<IGraphElementWithData, IGraphElementData> elementsData { get; } = new Dictionary<IGraphElementWithData, IGraphElementData>();
+        protected Dictionary<IGraphElementWithData, IGraphElementData> elementsData { get; } = new Dictionary<IGraphElementWithData, IGraphElementData>(GraphReferenceEqualityComparer<IGraphElementWithData>.Instance);
 
-        protected Dictionary<IGraphParentElement, IGraphData> childrenGraphsData { get; } = new Dictionary<IGraphParentElement, IGraphData>();
+        protected Dictionary<IGraphParentElement, IGraphData> childrenGraphsData { get; } = new Dictionary<IGraphParentElement, IGraphData>(GraphReferenceEqualityComparer<IGraphParentElement>.Instance);
 
         protected Dictionary<Guid, IGraphElementData> phantomElementsData { get; } = new Dictionary<Guid, IGraphElementData>();
 
         protected Dictionary<Guid, IGraphData> phantomChildrenGraphsData { get; } = new Dictionary<Guid, IGraphData>();
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetElementData(IGraphElementWithData element, out IGraphElementData data)
                 => elementsData.TryGetValue(element, out data);
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetChildGraphData(IGraphParentElement element, out IGraphData data)
         {
             return childrenGraphsData.TryGetValue(element, out data);

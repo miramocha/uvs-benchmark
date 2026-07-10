@@ -18,12 +18,5 @@ namespace Unity.VisualScripting
 
             if (stack.machine is IEventMachine eventMachine) eventMachine.RegisterFixedUpdate();
         }
-
-        public override void StopListening(GraphStack stack)
-        {
-            if (stack.machine is IEventMachine eventMachine && EventBus.WillRemoveHook(new EventHook(EventHooks.FixedUpdate, stack.rootObject))) eventMachine.UnregisterFixedUpdate();
-
-            base.StopListening(stack);
-        }
     }
 }

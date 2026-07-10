@@ -1,8 +1,10 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting.ReorderableList;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 using UnityObject = UnityEngine.Object;
 
@@ -290,36 +292,65 @@ namespace Unity.VisualScripting
 
     public class ProjectAssemblyOptionsListAdaptor : MetadataListAdaptor
     {
-        public ProjectAssemblyOptionsListAdaptor(Metadata metadata, Inspector parentInspector) : base((Metadata)metadata,
-            parentInspector)
-        { }
+        private static HashSet<string> _cachedEditorAssemblyNames;
+        private static GUIContent _warningIcon;
+
+        public ProjectAssemblyOptionsListAdaptor(Metadata metadata, Inspector parentInspector)
+            : base((Metadata)metadata, parentInspector)
+        {
+            if (_cachedEditorAssemblyNames == null)
+            {
+                _cachedEditorAssemblyNames = new HashSet<string>(StringComparer.Ordinal)
+                {
+                    "UnityEditor",
+                    "UnityEditor.CoreModule",
+                    "UnityEditor.Graphs"
+                };
+
+                Assembly[] assemblies = CompilationPipeline.GetAssemblies();
+
+                foreach (var assembly in assemblies)
+                {
+                    if ((assembly.flags & AssemblyFlags.EditorAssembly) == AssemblyFlags.EditorAssembly)
+                    {
+                        _cachedEditorAssemblyNames.Add(assembly.name);
+                    }
+                }
+            }
+
+            if (_warningIcon == null)
+            {
+                _warningIcon = EditorGUIUtility.IconContent("console.warnicon");
+                _warningIcon.tooltip = "Nodes from this assembly can use editor-only APIs. Using them might cause errors in builds.";
+            }
+        }
 
         public override void DrawItem(Rect position, int index)
         {
             base.DrawItem(position, index);
 
-            var assemblyName = ((LooseAssemblyName)metadata[index].value).name;
-            if (assemblyName == null) // Can be null when we're adding new items to the list (the last entry is empty)
+            var looseAssembly = ((LooseAssemblyName)metadata[index].value).name;
+
+            if (looseAssembly == null) // Can be null when we're adding new items to the list (the last entry is empty)
                 return;
-            var shouldShowWarning =
-                !assemblyName.StartsWith("Unity.VisualScripting.") &&
-                Codebase.editorAssemblies.FirstOrDefault(a => a.GetName().Name == assemblyName) != null;
+
+            bool shouldShowWarning =
+                !looseAssembly.StartsWith("Unity.VisualScripting.", StringComparison.Ordinal) &&
+                _cachedEditorAssemblyNames.Contains(looseAssembly);
+
             if (shouldShowWarning)
             {
-                DrawAssemblyReferencingEditorWarning(position, assemblyName);
+                DrawAssemblyReferencingEditorWarning(position);
             }
         }
 
-        void DrawAssemblyReferencingEditorWarning(Rect position, string assemblyName)
+        private void DrawAssemblyReferencingEditorWarning(Rect position)
         {
-            var warningIcon = EditorGUIUtility.IconContent("console.warnicon");
-            warningIcon.tooltip =
-                "Nodes from this assembly can use editor-only APIs. Using them might cause errors in builds.";
             var warningIconRect = position;
             warningIconRect.width = 20;
             warningIconRect.x -= 45;
 
-            GUI.Button(warningIconRect, warningIcon, GUIStyle.none);
+            GUI.Button(warningIconRect, _warningIcon, GUIStyle.none);
         }
     }
 }

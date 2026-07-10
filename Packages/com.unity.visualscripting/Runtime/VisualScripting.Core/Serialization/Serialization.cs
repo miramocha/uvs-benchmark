@@ -156,7 +156,7 @@ namespace Unity.VisualScripting
 
         private static string SerializeJson(fsSerializer serializer, object instance, bool forceReflected)
         {
-#if UVS_PROFILE_SERIALIZATION
+#if ENABLE_UVS_SERIALIZATION_PROFILING
             using (ProfilingUtility.SampleBlock("SerializeJson"))
             {
 #endif
@@ -176,7 +176,7 @@ namespace Unity.VisualScripting
             HandleResult("Serialization", result, instance as UnityObject);
 
             return fsJsonPrinter.CompressedJson(data);
-#if UVS_PROFILE_SERIALIZATION
+#if ENABLE_UVS_SERIALIZATION_PROFILING
             }
 #endif
         }
@@ -201,14 +201,14 @@ namespace Unity.VisualScripting
 
         private static void DeserializeJson(fsSerializer serializer, string json, ref object instance, bool forceReflected)
         {
-#if UVS_PROFILE_SERIALIZATION
+#if ENABLE_UVS_SERIALIZATION_PROFILING
             using (ProfilingUtility.SampleBlock("DeserializeJson"))
             {
 #endif
                 fsResult result = DeserializeJsonUtil(serializer, json, ref instance, forceReflected);
 
                 HandleResult("Deserialization", result, instance as UnityObject);
-#if UVS_PROFILE_SERIALIZATION
+#if ENABLE_UVS_SERIALIZATION_PROFILING
             }
 #endif
         }

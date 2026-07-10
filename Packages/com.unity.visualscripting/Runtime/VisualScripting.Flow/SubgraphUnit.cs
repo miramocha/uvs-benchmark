@@ -119,7 +119,7 @@ namespace Unity.VisualScripting
                             {
                                 var outputUnit = (GraphOutput)unit;
 
-                                var value = flow.GetValue(outputUnit.valueInputs[key]);
+                                var value = flow.GetValueData(outputUnit.valueInputs[key]);
 
                                 flow.stack.ExitParentElement();
 

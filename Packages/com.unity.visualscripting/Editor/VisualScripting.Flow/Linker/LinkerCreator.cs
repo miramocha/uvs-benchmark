@@ -141,6 +141,14 @@ internal class LinkerCreator : IPreprocessBuildWithReport
 
     private static void ProcessSubGraphs(HashSet<Type> types, SubgraphUnit subgraph)
     {
+        if (subgraph == null) return;
+
+        if (subgraph.nest == null) return;
+
+        if (subgraph.nest.graph == null) return;
+
+        if (subgraph.nest.graph.units == null) return;
+
         foreach (var unit in subgraph.nest.graph.units)
         {
             AddTypeToHashSet(types, unit);
@@ -219,7 +227,7 @@ internal class LinkerCreator : IPreprocessBuildWithReport
 
                 foreach (var scriptMachine in scriptMachines)
                 {
-                    if (scriptMachine.nest != null &&
+                    if (scriptMachine.nest != null && scriptMachine.graph != null &&
                         (scriptMachine.nest.source == GraphSource.Macro && includeGraphAssets) ||
                         scriptMachine.nest.source == GraphSource.Embed)
                     {

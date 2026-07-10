@@ -8,16 +8,6 @@ namespace Unity.VisualScripting
     {
         public MachineEditor(Metadata metadata) : base(metadata) { }
 
-        private Metadata useCompiledGraphMetadata
-        {
-            get
-            {
-                var meta = metadata[nameof(IMachine.UseCompiledGraph)];
-                meta.isEditable = !Application.isPlaying;
-                return meta;
-            }
-        }
-
         private Metadata nestMetadata => metadata[nameof(IMachine.nest)];
 
         private Metadata graphMetadata => nestMetadata[nameof(IGraphNest.graph)];
@@ -62,42 +52,6 @@ namespace Unity.VisualScripting
                 headerPosition.width = LudiqGUIUtility.currentInspectorWidthWithoutScrollbar;
                 OnHeaderGUI(headerPosition);
             }
-
-            var compiledPosition = position.VerticalSection(ref y, EditorGUIUtility.singleLineHeight);
-            EditorGUI.BeginDisabledGroup(!useCompiledGraphMetadata.isEditable);
-
-            // 1. Split the rect: 'left' for the Toggle, 'right' for the Button
-            // We give the button a fixed width of 80px
-            var buttonWidth = 80f;
-            var spacing = 5f;
-            var leftWidth = compiledPosition.width - buttonWidth - spacing;
-            var rightWidth = buttonWidth + spacing;
-            var toggleRect = new Rect(compiledPosition.x, compiledPosition.y, leftWidth, compiledPosition.height);
-            var buttonRect = new Rect(compiledPosition.x + leftWidth, compiledPosition.y, rightWidth, compiledPosition.height);
-            buttonRect.width -= spacing; // Adjust for the gap
-            buttonRect.x += spacing;
-
-            // 2. Draw the Toggle
-            var wasCompiled = (bool)useCompiledGraphMetadata.value;
-            LudiqGUI.Inspector(useCompiledGraphMetadata, toggleRect);
-            var isCompiled = (bool)useCompiledGraphMetadata.value;
-
-            // Trigger compile if toggled ON
-            if (wasCompiled != isCompiled && isCompiled)
-            {
-                Compile();
-            }
-
-            // 3. Draw the Recompile Button
-            // Only show/enable the button if we are actually using the compiled graph
-            EditorGUI.BeginDisabledGroup(!isCompiled);
-            if (GUI.Button(buttonRect, "Recompile", EditorStyles.miniButton))
-            {
-                Compile();
-            }
-            EditorGUI.EndDisabledGroup();
-
-            EditorGUI.EndDisabledGroup();
 
             var nestPosition = position.VerticalSection(ref y, LudiqGUI.GetEditorHeight(this, nestMetadata, position.width));
             OnNestGUI(nestPosition);

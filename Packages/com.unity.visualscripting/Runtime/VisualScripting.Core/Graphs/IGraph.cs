@@ -15,8 +15,6 @@ namespace Unity.VisualScripting
 
         string summary { get; }
 
-        int valuePortCount { get; set; }
-
         IGraphData CreateData();
 
         IGraphDebugData CreateDebugData();

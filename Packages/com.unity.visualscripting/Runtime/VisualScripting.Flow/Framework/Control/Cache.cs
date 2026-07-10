@@ -52,7 +52,7 @@ namespace Unity.VisualScripting
 
         private ControlOutput Store(Flow flow)
         {
-            flow.SetValue(output, flow.GetValue(input));
+            flow.SetValue(output, flow.GetValueData(input));
 
             return exit;
         }

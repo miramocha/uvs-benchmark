@@ -100,5 +100,32 @@ namespace Unity.VisualScripting
         {
             return skinnedColor.color.ToHexString();
         }
+
+        public static Texture2D CreateSolidColorTextureCopy(this Texture2D source, Color targetColor)
+        {
+            RenderTexture rt = RenderTexture.GetTemporary(source.width, source.height, 0, RenderTextureFormat.ARGB32);
+            RenderTexture previousActive = RenderTexture.active;
+            RenderTexture.active = rt;
+
+            GL.Clear(false, true, Color.clear);
+            Graphics.Blit(source, rt);
+
+            Texture2D readableTex = new Texture2D(source.width, source.height, TextureFormat.ARGB32, false);
+            readableTex.ReadPixels(new Rect(0, 0, source.width, source.height), 0, 0);
+
+            Color[] pixels = readableTex.GetPixels();
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                pixels[i] = new Color(targetColor.r, targetColor.g, targetColor.b, pixels[i].a * targetColor.a);
+            }
+
+            readableTex.SetPixels(pixels);
+            readableTex.Apply();
+
+            RenderTexture.active = previousActive;
+            RenderTexture.ReleaseTemporary(rt);
+
+            return readableTex;
+        }
     }
 }

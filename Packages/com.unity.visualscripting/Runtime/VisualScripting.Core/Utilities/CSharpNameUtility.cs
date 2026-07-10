@@ -95,6 +95,26 @@ namespace Unity.VisualScripting
             return member.Name;
         }
 
+        public static string CSharpTypeName(this MemberInfo member, ActionDirection direction)
+        {
+            if (member is MethodInfo && ((MethodInfo)member).IsOperator())
+            {
+                return member.DeclaringType.CSharpName() + "." + operators[member.Name] + " operator";
+            }
+
+            if (member is ConstructorInfo)
+            {
+                return "new " + member.DeclaringType.CSharpName();
+            }
+
+            if ((member is FieldInfo || member is PropertyInfo) && direction != ActionDirection.Any)
+            {
+                return member.DeclaringType.CSharpName() + "." + $"{member.Name} ({direction.ToString().ToLower()})";
+            }
+
+            return member.DeclaringType.CSharpName() + "." + member.Name;
+        }
+
         public static string CSharpName(this Type type, bool includeGenericParameters = true)
         {
             return type.CSharpName(TypeQualifier.Name, includeGenericParameters);

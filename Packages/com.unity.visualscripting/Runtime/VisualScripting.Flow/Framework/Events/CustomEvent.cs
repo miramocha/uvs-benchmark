@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using Unity.Collections;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Unity.VisualScripting
@@ -52,7 +52,6 @@ namespace Unity.VisualScripting
 
         protected override bool ShouldTrigger(Flow flow, CustomEventArgs args)
         {
-            flow.useDebugFlow = args.debug;
             return CompareNames(flow, name, args.name);
         }
 
@@ -60,9 +59,9 @@ namespace Unity.VisualScripting
         {
             for (var i = 0; i < argumentCount; i++)
             {
-                var argValue = args.arguments[i];
+                ref readonly ParameterValue argValue = ref args[i];
 
-                if (argValue.usesObjectID)
+                if (argValue.UsesObjectID)
                 {
                     flow.SetValue(argumentPorts[i], argValue.ObjectValue);
                 }
@@ -73,45 +72,40 @@ namespace Unity.VisualScripting
             }
         }
 
-        public static void Trigger(GameObject target, string name, params object[] args)
+        public static unsafe void Trigger(GameObject target, string name, params object[] args)
         {
-            var values = new NativeArray<ParameterValue>(args.Length, Allocator.Temp);
-            for (int i = 0; i < args.Length; i++)
+            var values = stackalloc ParameterValue[args.Length];
+
+            var count = args.Length;
+
+            for (int i = 0; i < count; i++)
             {
                 values[i] = new ParameterValue(args[i]);
             }
 
             try
             {
-                EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, values));
+                EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, values, count));
             }
             finally
             {
-                values.Dispose();
+                for (int i = 0; i < count; i++)
+                {
+                    var objectID = values[i].objectID;
+                    if (objectID != -1)
+                        ParameterValue.FreeObject(objectID);
+                }
             }
         }
 
-        public static void TriggerDebug(GameObject target, string name, params object[] args)
+        public static void Trigger(GameObject target, string name, Span<ParameterValue> args)
         {
-            var values = new NativeArray<ParameterValue>(args.Length, Allocator.Temp);
-            for (int i = 0; i < args.Length; i++)
-            {
-                values[i] = new ParameterValue(args[i]);
-            }
-
-            try
-            {
-                EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, values, true));
-            }
-            finally
-            {
-                values.Dispose();
-            }
+            EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, args));
         }
 
-        public static void Trigger(GameObject target, string name, NativeArray<ParameterValue> args, bool debug = false)
+        public static unsafe void Trigger(GameObject target, string name, ParameterValue* args, int count)
         {
-            EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, args, debug));
+            EventBus.Trigger(EventHooks.Custom, target, new CustomEventArgs(name, args, count));
         }
     }
 }

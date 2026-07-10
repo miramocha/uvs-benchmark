@@ -18,6 +18,7 @@ namespace Unity.VisualScripting
         private ScriptReferenceResolverSettings _scriptReferenceResolverSettings;
 
         private BoltCoreConfiguration _vsCoreConfig = null;
+        private BoltFlowConfiguration _vsFlowConfig = null;
 
         public ProjectSettingsProviderView() : base(Path, SettingsScope.Project)
         {
@@ -27,7 +28,7 @@ namespace Unity.VisualScripting
 
         private void CreateOptionsIfNeeded()
         {
-            _coreSettings ??= new CoreSettings(_vsCoreConfig);
+            _coreSettings ??= new CoreSettings(_vsCoreConfig, _vsFlowConfig);
             _assemblyOptionsSettings ??= new AssemblyOptionsSettings(_vsCoreConfig);
             _typeOptionsSettings ??= new TypeOptionsSettings(_vsCoreConfig);
             _customPropertyProviderSettings ??= new CustomPropertyProviderSettings();
@@ -48,6 +49,7 @@ namespace Unity.VisualScripting
             }
 
             _vsCoreConfig = BoltCore.Configuration;
+            _vsFlowConfig = BoltFlow.Configuration;
         }
 
         public override void OnGUI(string searchContext)

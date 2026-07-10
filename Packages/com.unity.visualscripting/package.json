@@ -1,7 +1,7 @@
 {
   "name": "com.unity.visualscripting",
   "displayName": "Visual Scripting",
-  "version": "1.9.11-enhanced.3",
+  "version": "1.9.11-enhanced.4",
   "unity": "2021.3",
   "description": "Visual scripting is a workflow that uses visual, node-based graphs to design behaviors rather than write lines of C# script.\n\nEnabling artists, designers and programmers alike, visual scripting can be used to design final logic, quickly create prototypes, iterate on gameplay and create custom nodes to help streamline collaboration.\n\nVisual scripting is compatible with third-party APIs, including most packages, assets and custom libraries.",
   "dependencies": {
@@ -12,7 +12,7 @@
     "com.unity.visualscripting.tests": "1.9.11"
   },
   "_upm": {
-    "changelog": "### Added\n- Optimized constructor invokers (0–5 arity) and reflection fallback.\n- Flow debugging for On Start and On Enable.\n\n### Changed\n- Flow, custom events, and reflection invoker hot paths; Unsafe plugin under VisualScripting.Core.\n\n### Fixed\n- Custom events and CodeGeneratorValueUtility.\n\nSee CHANGELOG.enhanced.md for full fork release notes (based on Unity 1.9.11)."
+    "changelog": "### Added\n- Compiled member units and ParameterValue object registry (Mono/IL2CPP).\n\n### Changed\n- ForEach, Flow/GraphPointer/EventBus, member units, and static reflection invoker hot paths.\n\nSee CHANGELOG.enhanced.md for full fork release notes (based on Unity 1.9.11)."
   },
   "upmCi": {
     "footprint": "58e994797b8ecae04238fac7a0cabbdf5069796d"

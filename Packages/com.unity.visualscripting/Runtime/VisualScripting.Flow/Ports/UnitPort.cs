@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Profiling;
 
 namespace Unity.VisualScripting
 {
@@ -15,7 +17,31 @@ namespace Unity.VisualScripting
             this.key = key;
         }
 
-        public IUnit unit { get; set; }
+        private ProfilerMarker? _profilerMarker;
+        private IUnit _unit;
+
+        public ProfilerMarker ProfilerMarker
+        {
+            get
+            {
+                if (unit == null) return default;
+
+                return _profilerMarker ??= new ProfilerMarker($"{Unit.GetUnitName(_unit)} : {key}");
+            }
+        }
+
+        public IUnit unit
+        {
+            get => _unit;
+            set
+            {
+                if (_unit != value)
+                {
+                    _unit = value;
+                    _profilerMarker = null;
+                }
+            }
+        }
 
         public string key { get; }
 

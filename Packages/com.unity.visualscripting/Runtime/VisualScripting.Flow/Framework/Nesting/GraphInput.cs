@@ -29,7 +29,7 @@ namespace Unity.VisualScripting
                 ValueOutput(type, key, (flow) =>
                 {
                     var superUnit = flow.stack.GetParent<SubgraphUnit>();
-
+#if UNITY_EDITOR
                     if (flow.enableDebug)
                     {
                         var editorData = flow.stack.GetElementDebugData<IUnitDebugData>(superUnit);
@@ -37,10 +37,10 @@ namespace Unity.VisualScripting
                         editorData.lastInvokeFrame = EditorTimeBinding.frame;
                         editorData.lastInvokeTime = EditorTimeBinding.time;
                     }
-
+#endif
                     flow.stack.ExitParentElement();
                     superUnit.EnsureDefined();
-                    var value = flow.GetValue(superUnit.valueInputs[key], type);
+                    var value = flow.GetValueData(superUnit.valueInputs[key]);
                     flow.stack.EnterParentElement(superUnit);
 
                     return value;
@@ -53,8 +53,9 @@ namespace Unity.VisualScripting
             graph.onPortDefinitionsChanged += Define;
         }
 
-        protected override void BeforeUndefine()
+        public override void BeforeRemove()
         {
+            base.BeforeRemove();
             graph.onPortDefinitionsChanged -= Define;
         }
     }

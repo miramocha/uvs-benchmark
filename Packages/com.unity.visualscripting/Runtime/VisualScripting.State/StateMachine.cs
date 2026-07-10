@@ -31,6 +31,8 @@ namespace Unity.VisualScripting
                 }
             }
 
+            SetupProxies();
+
             base.OnInstantiateWhileEnabled();
         }
 
@@ -45,6 +47,8 @@ namespace Unity.VisualScripting
                     graph.Stop(flow);
                 }
             }
+
+            RemoveProxies();
         }
 
         protected override void OnDisable()
@@ -58,6 +62,8 @@ namespace Unity.VisualScripting
                     graph.Stop(flow);
                 }
             }
+
+            RemoveProxies();
         }
 
         [ContextMenu("Show Data...")]

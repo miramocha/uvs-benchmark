@@ -46,8 +46,10 @@ namespace Unity.VisualScripting
             graph.onPortDefinitionsChanged += Define;
         }
 
-        protected override void BeforeUndefine()
+        public override void BeforeRemove()
         {
+            base.BeforeRemove();
+
             graph.onPortDefinitionsChanged -= Define;
         }
     }

@@ -946,16 +946,87 @@ namespace Unity.VisualScripting
 
 
         #region Context
-
         protected override IEnumerable<DropdownOption> contextOptions
         {
             get
             {
                 yield return new DropdownOption((Action)ReplaceUnit, "Replace...");
 
+                var selectedMemberUnits = selection.OfType<MemberUnit>().ToList();
+                if (selectedMemberUnits.Count > 0)
+                {
+                    if (selectedMemberUnits.Any(mu => !mu.IsCompiled))
+                    {
+                        string label = selectedMemberUnits.Count == 1 ? "Optimize Node" : "Optimize Selected Nodes";
+                        yield return new DropdownOption((Action)OptimizeSelectedMemberUnits, label);
+                    }
+                    else
+                    {
+                        string label = selectedMemberUnits.Count == 1 ? "Switch to Optimized Node" : "Switch Selected to Optimized Nodes";
+                        yield return new DropdownOption((Action)UseCompiledSelectedMemberUnits, label);
+                    }
+                }
+
                 foreach (var baseOption in base.contextOptions)
                 {
                     yield return baseOption;
+                }
+            }
+        }
+
+        private void OptimizeSelectedMemberUnits()
+        {
+            var selectedMemberUnits = selection.OfType<MemberUnit>().ToList();
+            if (selectedMemberUnits.Count == 0) return;
+
+            var uncompiledUnits = selectedMemberUnits.Where(mu => !mu.IsCompiled).ToList();
+            var alreadyCompiledUnits = selectedMemberUnits.Where(mu => mu.IsCompiled).ToList();
+
+            string title = selectedMemberUnits.Count == 1 ? "Optimize Node" : $"Optimize {selectedMemberUnits.Count} Nodes";
+
+            if (selectedMemberUnits.Count > 1)
+            {
+                bool proceed = EditorUtility.DisplayDialog(title,
+                $"This will generate scripts for {uncompiledUnits.Count} nodes and replace all {selectedMemberUnits.Count} selected nodes once compilation completes.",
+                "Optimize", "Cancel");
+
+                if (!proceed) return;
+            }
+
+            if (alreadyCompiledUnits.Count > 0)
+            {
+                foreach (var mu in alreadyCompiledUnits)
+                {
+                    Type compiledType = Type.GetType(mu.CompiledTypeName);
+                    if (compiledType != null)
+                    {
+                        UnitWidgetHelper.ReplaceMemberUnitUnit(mu, compiledType, context, selection);
+                    }
+                }
+            }
+
+            if (uncompiledUnits.Count > 0)
+            {
+                MemberUnitCompiler.CompileAndReplaceBatch(uncompiledUnits);
+            }
+        }
+
+        private void UseCompiledSelectedMemberUnits()
+        {
+            var selectedMemberUnits = selection.OfType<MemberUnit>().ToList();
+
+            foreach (var memberUnit in selectedMemberUnits)
+            {
+                if (memberUnit == null) continue;
+
+                Type compiledType = Type.GetType(memberUnit.CompiledTypeName);
+                if (compiledType != null)
+                {
+                    UnitWidgetHelper.ReplaceMemberUnitUnit(memberUnit, compiledType, context, selection);
+                }
+                else
+                {
+                    Debug.LogError($"[MemberUnit] Type look up failed for expected node configuration: {memberUnit.CompiledTypeName}");
                 }
             }
         }
@@ -1080,6 +1151,71 @@ namespace Unity.VisualScripting
 
     internal class UnitWidgetHelper
     {
+        internal static void ReplaceCompiledMemberUnitUnit(CompiledMemberUnit unit, Member member, IGraphContext context, GraphSelection selection)
+        {
+            if (unit == null || member == null || context == null) return;
+
+            var oldUnit = unit;
+            var unitPosition = oldUnit.position;
+            var preservation = UnitPreservation.Preserve(oldUnit);
+
+            context.BeginEdit();
+
+            UndoUtility.RecordEditedObject($"Replaced {unit.Name} unit");
+
+            var graph = oldUnit.graph;
+            oldUnit.graph.units.Remove(oldUnit);
+            MemberUnit newUnit;
+            if (unit.Direction == ActionDirection.Get)
+            {
+                newUnit = new GetMember(member);
+            }
+            else if (unit.Direction == ActionDirection.Set)
+            {
+                newUnit = new SetMember(member);
+            }
+            else
+            {
+                newUnit = new InvokeMember(member);
+            }
+            unit.CopyTo(newUnit);
+            graph.units.Add(newUnit);
+            newUnit.Define();
+            newUnit.guid = Guid.NewGuid();
+            newUnit.position = unitPosition;
+            preservation.RestoreTo(newUnit);
+            selection?.Select(newUnit);
+            GUI.changed = true;
+            context.EndEdit();
+        }
+
+        internal static void ReplaceMemberUnitUnit(MemberUnit unit, Type type, IGraphContext context, GraphSelection selection)
+        {
+            if (unit == null || type == null || context == null) return;
+
+            var oldUnit = unit;
+            var unitPosition = oldUnit.position;
+            var preservation = UnitPreservation.Preserve(oldUnit);
+
+            context.BeginEdit();
+            if (unit is MemberUnit memberUnit)
+                UndoUtility.RecordEditedObject($"Compiled {memberUnit.member.ToPseudoDeclarer()} unit");
+            else
+                UndoUtility.RecordEditedObject("Compiled and Replaced node");
+            var graph = oldUnit.graph;
+            oldUnit.graph.units.Remove(oldUnit);
+            var newUnit = (CompiledMemberUnit)type.Instantiate();
+            newUnit.CopyFrom(unit);
+            graph.units.Add(newUnit);
+            newUnit.Define();
+            newUnit.guid = Guid.NewGuid();
+            newUnit.position = unitPosition;
+            preservation.RestoreTo(newUnit);
+            selection?.Select(newUnit);
+            GUI.changed = true;
+            context.EndEdit();
+        }
+
         internal static void ReplaceUnit(IUnit unit, GraphReference reference, IGraphContext context, GraphSelection selection, EventWrapper eventWrapper)
         {
             var oldUnit = unit;
