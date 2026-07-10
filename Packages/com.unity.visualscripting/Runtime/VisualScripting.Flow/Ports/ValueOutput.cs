@@ -26,7 +26,11 @@ namespace Unity.VisualScripting
 
         internal Func<Flow, bool> canPredictValue;
 
+        [DoNotSerialize]
         private bool cacheResult;
+
+        [DoNotSerialize]
+        internal bool cachedValue;
 
         public bool supportsPrediction => canPredictValue != null;
         public bool supportsCache => cacheResult;
@@ -87,6 +91,13 @@ namespace Unity.VisualScripting
 
             return this;
         }
+
+        internal void CacheValue()
+        {
+            cachedValue = true;
+        }
+
+        void IUnitValuePort.CacheValue() => CacheValue();
 
         public ValueOutput PredictableIf(Func<Flow, bool> condition)
         {

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Unity.VisualScripting
@@ -100,6 +101,7 @@ namespace Unity.VisualScripting
             }
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ParameterValue Get(Flow flow)
         {
             var name = flow.GetValue<string>(this.name);

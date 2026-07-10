@@ -66,6 +66,7 @@ namespace Unity.VisualScripting
 
         public void Branch(Flow flow)
         {
+#if UNITY_EDITOR
             if (flow.enableDebug)
             {
                 var editorData = flow.stack.GetElementDebugData<DebugData>(this);
@@ -73,7 +74,7 @@ namespace Unity.VisualScripting
                 editorData.lastBranchFrame = EditorTimeBinding.frame;
                 editorData.lastBranchTime = EditorTimeBinding.time;
             }
-
+#endif
             try
             {
                 source.OnExit(flow, StateExitReason.Branch);

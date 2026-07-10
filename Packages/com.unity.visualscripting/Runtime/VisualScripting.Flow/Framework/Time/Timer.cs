@@ -185,9 +185,16 @@ namespace Unity.VisualScripting
 
         private void TriggerUpdate(GraphReference reference)
         {
+            var data = reference.GetElementData<Data>(this);
+
+            if (!data.active || data.paused)
+            {
+                return;
+            }
+
             using (var flow = Flow.New(reference))
             {
-                Update(flow);
+                Update(flow, data);
             }
         }
 
@@ -249,35 +256,32 @@ namespace Unity.VisualScripting
             flow.SetValue(remainingRatio, Mathf.Clamp01((data.duration - data.elapsed) / data.duration));
         }
 
-        public void Update(Flow flow)
+        public void Update(Flow flow, Data data)
         {
-            var data = flow.stack.GetElementData<Data>(this);
-
-            if (!data.active || data.paused)
-            {
-                return;
-            }
-
             data.elapsed += data.unscaled ? Time.unscaledDeltaTime : Time.deltaTime;
 
             data.elapsed = Mathf.Min(data.elapsed, data.duration);
 
             AssignMetrics(flow, data);
 
-            var stack = flow.PreserveStack();
-
-            flow.Invoke(tick);
-
             if (data.elapsed >= data.duration)
             {
                 data.active = false;
 
+                var stack = flow.PreserveStack();
+
+                flow.Invoke(tick);
+
                 flow.RestoreStack(stack);
 
                 flow.Invoke(completed);
-            }
 
-            flow.DisposePreservedStack(stack);
+                flow.DisposePreservedStack(stack);
+            }
+            else
+            {
+                flow.Invoke(tick);
+            }
         }
     }
 }

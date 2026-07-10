@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Unity.VisualScripting.AssemblyQualifiedNameParser;
+using UnityEngine;
 
 namespace Unity.VisualScripting
 {
@@ -101,6 +103,36 @@ namespace Unity.VisualScripting
         protected override string DefinedSummary()
         {
             return member.info.Summary();
+        }
+
+        protected override IEnumerable<EditorTexture> DefinedIcons()
+        {
+            yield return DarkEventIcon;
+        }
+
+        private static EditorTexture _darkEventIcon;
+
+        private static EditorTexture DarkEventIcon
+        {
+            get
+            {
+                if (_darkEventIcon == null || _darkEventIcon.Single() == null)
+                {
+                    _darkEventIcon = null;
+
+                    Texture2D originalTex = typeof(BoltUnityEvent).Icon()?[IconSize.Small];
+
+                    if (originalTex == null)
+                    {
+                        return null;
+                    }
+
+                    Texture2D solidColorTex = originalTex.CreateSolidColorTextureCopy(new Color(0.15f, 0.15f, 0.15f));
+                    _darkEventIcon = EditorTexture.Single(solidColorTex);
+                }
+
+                return _darkEventIcon;
+            }
         }
     }
 }

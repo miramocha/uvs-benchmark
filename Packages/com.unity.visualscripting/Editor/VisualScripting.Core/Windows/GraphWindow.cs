@@ -118,9 +118,10 @@ namespace Unity.VisualScripting
 
         public void Validate()
         {
-            if (reference != null && !reference.isValid)
+            if (reference != null)
             {
-                reference = reference.Revalidate(false);
+                if (!reference.isValid)
+                    reference = reference.Revalidate(false);
             }
         }
 
@@ -332,12 +333,13 @@ namespace Unity.VisualScripting
                 catch (ExitGUIException) { }
 
                 Validate();
+
                 MatchSelection();
 
                 ValidateReloadScriptSettings();
             };
         }
-
+        
         private void ValidateReloadScriptSettings()
         {
             bool checkReloadScriptSettings = !EditorPrefs.GetBool("DoNotCheckReloadScriptSettings");

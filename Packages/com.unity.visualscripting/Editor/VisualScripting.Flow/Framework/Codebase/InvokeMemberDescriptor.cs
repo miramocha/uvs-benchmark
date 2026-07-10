@@ -59,14 +59,14 @@ namespace Unity.VisualScripting
                     description.showLabel = true;
                 }
             }
-            else if (port is ValueInput && Array.IndexOf(unit.inputParameters, (ValueInput)port) != -1)
+            else if (port is ValueInput && unit.TryGetInput(Array.IndexOf(unit.inputParameters, (ValueInput)port), out _))
             {
                 var parameter = member.GetParameterInfos().Single(p => "%" + p.Name == port.key);
 
                 description.label = parameter.DisplayName();
                 description.summary = documentation?.ParameterSummary(parameter);
             }
-            else if (port is ValueOutput && Array.IndexOf(unit.outputParameters, (ValueOutput)port) != -1)
+            else if (port is ValueOutput && unit.TryGetOutput(Array.IndexOf(unit.outputParameters, (ValueOutput)port), out _))
             {
                 var parameter = member.GetParameterInfos().Single(p => "&" + p.Name == port.key);
 

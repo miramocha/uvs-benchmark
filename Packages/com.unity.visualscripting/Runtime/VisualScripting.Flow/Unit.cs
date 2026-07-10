@@ -50,6 +50,11 @@ namespace Unity.VisualScripting
         {
             base.BeforeRemove();
 
+            foreach (var valueInput in valueInputs)
+            {
+                valueInput?.Dispose();
+            }
+
             Disconnect();
         }
 
@@ -62,7 +67,7 @@ namespace Unity.VisualScripting
                 listener.StartListening(instance);
             }
         }
-        
+
         public override void Uninstantiate(GraphReference instance)
         {
             if (this is IGraphEventListener listener)
@@ -115,6 +120,10 @@ namespace Unity.VisualScripting
             defaultValues.Clear();
             controlInputs.Clear();
             controlOutputs.Clear();
+            foreach (var valueInput in valueInputs)
+            {
+                valueInput?.Dispose();
+            }
             valueInputs.Clear();
             valueOutputs.Clear();
             invalidInputs.Clear();
@@ -426,7 +435,7 @@ namespace Unity.VisualScripting
 
         #endregion
 
-        public string GetElementStackTrace(GraphReference reference, Unit unit, string pathPrefix = "/")
+        public string GetElementStackTrace(GraphReference reference, IUnitPort from, IUnitPort to, string pathPrefix = "/")
         {
             string BuildPrefix(GraphReference nodePath)
             {
@@ -507,15 +516,18 @@ namespace Unity.VisualScripting
 
             fakePath = fakePath.Replace("//", "/");
 
-            string unitLink = $"{GetUnitName()} (at {fakePath}:[VSUnit:{unit}])";
+            string fromNode = from != null ? $"[{GetUnitName(from.unit)} : {from.key}] -> " : "";
+            string toNodeName = to != null ? GetUnitName(to.unit) : "Flow End";
+
+            string unitLink = $"{fromNode}[{GetUnitName()} : {to?.key}] (at {fakePath}:[VSUnit:{this}, {reference.ToString().Replace(" > ", " | ")}])";
 
             return unitLink;
         }
 
         /// <summary>
-        /// Used for error the Visual Scripting error stacktrace.
+        /// Used for error the Visual Scripting error stacktrace and Profiler Names.
         /// </summary>
-        /// <returns>The name to display in the console window</returns>
+        /// <returns>The display name of the Unit</returns>
         protected virtual string GetUnitName()
         {
             return UnitTitle(GetType(), true, true);

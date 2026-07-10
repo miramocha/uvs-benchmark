@@ -14,7 +14,7 @@ namespace Unity.VisualScripting
 
         public override string ToString()
         {
-            return StringUtility.FallbackWhitespace(title, base.ToString());
+            return StringUtility.FallbackWhitespace(title, $"Unnamed");
         }
 
         public abstract IGraphData CreateData();
@@ -48,9 +48,6 @@ namespace Unity.VisualScripting
 
         [SerializeAs(nameof(elements))]
         private List<IGraphElement> _elements = new List<IGraphElement>();
-
-        [DoNotSerialize]
-        public int valuePortCount { get; set; }
 
         [DoNotSerialize]
         public MergedGraphElementCollection elements { get; }
@@ -171,5 +168,26 @@ namespace Unity.VisualScripting
         }
 
         #endregion
+
+        public static string GetGraphName(GraphReference reference)
+        {
+            if (reference == null) return "?";
+
+            if (!string.IsNullOrEmpty(reference.graph?.title)) return reference.graph.title;
+
+            if (reference.IsWithin<IGraphNester>())
+            {
+                var nester = reference.GetParent<IGraphNester>();
+
+                if (nester.nest.source == GraphSource.Macro)
+                    return (nester.nest.macro as UnityEngine.Object).name;
+                else
+                    return $"Unnamed {nester.GetType().Name}";
+            }
+
+            if (reference.rootObject != null) return reference.rootObject.name;
+
+            return $"Unnamed {reference.graph.GetType().Name}";
+        }
     }
 }

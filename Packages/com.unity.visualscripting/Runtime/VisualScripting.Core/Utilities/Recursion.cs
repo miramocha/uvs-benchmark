@@ -6,26 +6,25 @@ namespace Unity.VisualScripting
 {
     public class Recursion<T> : IPoolable, IDisposable
     {
-        private static readonly IEqualityComparer<T> Comparer = EqualityComparer<T>.Default;
+        private static readonly EqualityComparer<T> Comparer = EqualityComparer<T>.Default;
+        private static readonly Func<Recursion<T>> recursionFactory = static () => new Recursion<T>();
+
+        private T[] traversedStack;
+        private int traversedSize;
+        private bool disposed;
+        protected int maxDepth;
+
         protected Recursion()
         {
-            traversedOrder = new Stack<T>();
-            traversedCount = new Dictionary<T, int>();
+            traversedStack = new T[64];
+            traversedSize = 0;
         }
-
-        private readonly Stack<T> traversedOrder;
-
-        private readonly Dictionary<T, int> traversedCount;
-
-        private bool disposed;
-
-        protected int maxDepth;
 
         public void Enter(T o)
         {
             if (!TryEnter(o))
             {
-                throw new StackOverflowException($"Max recursion depth of {maxDepth} has been exceeded. Consider increasing '{nameof(Recursion)}.{nameof(Recursion.defaultMaxDepth)}'.");
+                throw new StackOverflowException($"Max recursion depth of {maxDepth} has been exceeded. Consider increasing '{nameof(Recursion)}.{nameof(Recursion.maxDepth)}'.");
             }
         }
 
@@ -36,52 +35,47 @@ namespace Unity.VisualScripting
                 throw new ObjectDisposedException(ToString());
             }
 
-            // Disable null check because it boxes o
-            // Ensure.That(nameof(o)).IsNotNull(o);
+            int matchCount = 0;
 
-            if (traversedCount.TryGetValue(o, out var depth))
+            for (int i = traversedSize - 1; i >= 0; i--)
             {
-                if (depth < maxDepth)
+                if (Comparer.Equals(traversedStack[i], o))
                 {
-                    traversedOrder.Push(o);
-                    traversedCount[o]++;
-                    return true;
-                }
-                else
-                {
-                    return false;
+                    matchCount++;
+                    if (matchCount >= maxDepth)
+                    {
+                        return false;
+                    }
                 }
             }
-            else
+
+            if (traversedSize >= traversedStack.Length)
             {
-                traversedOrder.Push(o);
-                traversedCount.Add(o, 1);
-                return true;
+                Array.Resize(ref traversedStack, traversedStack.Length * 2);
             }
+
+            traversedStack[traversedSize++] = o;
+            return true;
         }
 
         public void Exit(T o)
         {
-            if (traversedOrder.Count == 0)
+            if (traversedSize == 0)
             {
                 throw new InvalidOperationException("Trying to exit an empty recursion stack.");
             }
 
-            var current = traversedOrder.Peek();
+            int lastIdx = traversedSize - 1;
+            var current = traversedStack[lastIdx];
 
             if (!Comparer.Equals(o, current))
             {
                 throw new InvalidOperationException($"Exiting recursion stack in a non-consecutive order:\nProvided: {o} / Expected: {current}");
             }
 
-            traversedOrder.Pop();
+            traversedStack[lastIdx] = default;
 
-            var newDepth = traversedCount[current]--;
-
-            if (newDepth == 0)
-            {
-                traversedCount.Remove(current);
-            }
+            traversedSize--;
         }
 
         public void Dispose()
@@ -107,8 +101,8 @@ namespace Unity.VisualScripting
         void IPoolable.Free()
         {
             disposed = true;
-            traversedCount.Clear();
-            traversedOrder.Clear();
+            Array.Clear(traversedStack, 0, traversedSize);
+            traversedSize = 0;
         }
 
         public static Recursion<T> New()
@@ -128,7 +122,7 @@ namespace Unity.VisualScripting
                 throw new ArgumentException("Max recursion depth must be at least one.", nameof(maxDepth));
             }
 
-            var recursion = GenericPool<Recursion<T>>.New(() => new Recursion<T>());
+            var recursion = GenericPool<Recursion<T>>.New(recursionFactory);
 
             recursion.maxDepth = maxDepth;
 
@@ -138,6 +132,7 @@ namespace Unity.VisualScripting
 
     public sealed class Recursion : Recursion<object>
     {
+        private static readonly Func<Recursion> recursionFactory = static () => new Recursion();
         private Recursion() : base() { }
 
         public static int defaultMaxDepth { get; set; } = 100;
@@ -171,7 +166,7 @@ namespace Unity.VisualScripting
                 throw new ArgumentException("Max recursion depth must be at least one.", nameof(maxDepth));
             }
 
-            var recursion = GenericPool<Recursion>.New(() => new Recursion());
+            var recursion = GenericPool<Recursion>.New(recursionFactory);
 
             recursion.maxDepth = maxDepth;
 

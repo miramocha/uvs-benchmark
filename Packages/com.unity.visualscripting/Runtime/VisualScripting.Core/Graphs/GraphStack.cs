@@ -9,6 +9,8 @@ namespace Unity.VisualScripting
 
         private GraphStack() { }
 
+        private static Func<GraphStack> stackFactory = static () => new GraphStack();
+
         internal void InitializeNoAlloc(IGraphRoot root, List<IGraphParentElement> parentElements, bool ensureValid)
         {
             Initialize(root);
@@ -33,13 +35,13 @@ namespace Unity.VisualScripting
 
         internal static GraphStack New(IGraphRoot root, List<IGraphParentElement> parentElements)
         {
-            var stack = GraphStackPool.New(root, parentElements, () => new GraphStack());
+            var stack = GraphStackPool.New(root, parentElements, stackFactory);
             return stack;
         }
 
         internal static GraphStack New(GraphPointer model)
         {
-            var stack = GraphStackPool.New(model, () => new GraphStack());
+            var stack = GraphStackPool.New(model, stackFactory);
             return stack;
         }
 
@@ -60,11 +62,7 @@ namespace Unity.VisualScripting
         void IPoolable.Free()
         {
             root = null;
-            parentStack.Clear();
-            parentElementStack.Clear();
-            graphStack.Clear();
-            dataStack.Clear();
-            debugDataStack.Clear();
+            Array.Clear(frames, 0, frames.Length);
             version = -1;
             depth = 1;
         }
@@ -104,7 +102,7 @@ namespace Unity.VisualScripting
 
         public bool TryEnterParentElementUnsafe(IGraphParentElement parentElement)
         {
-            return TryEnterParentElement(parentElement, out var error, null, true);
+            return TryEnterParentElement(parentElement, out var error, -1, true);
         }
 
         public new void ExitParentElement()

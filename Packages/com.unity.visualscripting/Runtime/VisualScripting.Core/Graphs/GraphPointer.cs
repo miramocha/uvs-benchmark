@@ -11,6 +11,15 @@ namespace Unity.VisualScripting
 {
     public abstract class GraphPointer
     {
+        protected struct GraphStackFrame
+        {
+            public IGraphParent Parent;
+            public IGraphParentElement ParentElement;
+            public IGraph Graph;
+            public IGraphData Data;
+            public IGraphDebugData DebugData;
+        }
+
         #region Lifecycle
 
         protected static bool IsValidRoot(IGraphRoot root)
@@ -40,18 +49,19 @@ namespace Unity.VisualScripting
             version++;
 
             this.root = root;
+            ref var frame = ref frames[0];
+            frame.Parent = root;
+            frame.Graph = root.childGraph;
+            frame.Data = machine?.graphData;
+            var debugData = fetchRootDebugDataBinding?.Invoke(root);
+            frame.DebugData = debugData;
 
-            parentStack.Add(root);
+            _currentDataCache = machine?.graphData;
+            _currentDebugDataCache = debugData;
+            _currentParentCache = root;
 
-            graphStack.Add(root.childGraph);
-
-            dataStack.Add(machine?.graphData);
-
-            _currentDataCache = dataStack[0];
-
-            depth = parentStack.Count;
-
-            debugDataStack.Add(fetchRootDebugDataBinding?.Invoke(root));
+            depth = 1;
+            frameCount = 1;
 
             if (machine != null)
             {
@@ -131,57 +141,51 @@ namespace Unity.VisualScripting
         {
             if (other == null) return;
 
-            _currentDataCache = other._currentDataCache;
-            depth = other.depth;
-
+            // With built-in functionality isCloning will only be false when using Flow.RestoreStack
+            // this will avoid cloning if the stack never changed during that Invoke, which is good
+            // because if the stack never changed nothing needs to be restored from the Flow.PreserveStack
             if (!isCloning && version == other.version) return;
 
-            int otherVersion = other.version;
+            _currentDataCache = other._currentDataCache;
+            _currentDebugDataCache = other._currentDebugDataCache;
+            _currentParentCache = other._currentParentCache;
 
+            depth = other.depth;
             root = other.root;
             gameObject = other.gameObject;
 
-            SyncList(parentStack, other.parentStack);
-            SyncList(parentElementStack, other.parentElementStack);
-            SyncList(graphStack, other.graphStack);
-            SyncList(dataStack, other.dataStack);
-            SyncList(debugDataStack, other.debugDataStack);
+            int sourceCount = other.frameCount;
+            int targetCount = frameCount;
 
-            version = otherVersion;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void SyncList<T>(List<T> target, List<T> source)
-        {
-            int count = source.Count;
-            int targetCount = target.Count;
-
-            if (count == 0 && targetCount == 0) return;
-
-            int minCount = count < targetCount ? count : targetCount;
-
-            if (count > targetCount && target.Capacity < count)
+            if (sourceCount > 0 || targetCount > 0)
             {
-                target.Capacity = count;
-            }
-
-            for (int i = 0; i < minCount; i++)
-            {
-                target[i] = source[i];
-            }
-
-            if (count > targetCount)
-            {
-                for (int i = minCount; i < count; i++)
+                if (sourceCount > frames.Length)
                 {
-                    target.Add(source[i]);
+                    int nextPower = Mathf.NextPowerOfTwo(sourceCount);
+                    frames = new GraphStackFrame[nextPower];
+                }
+
+                if (sourceCount > 0)
+                {
+                    for (int i = 0; i < sourceCount; i++)
+                    {
+                        this.frames[i] = other.frames[i];
+                    }
+                }
+
+                if (targetCount > sourceCount)
+                {
+                    for (int i = sourceCount; i < targetCount; i++)
+                    {
+                        this.frames[i] = default;
+                    }
                 }
             }
-            else if (targetCount > minCount)
-            {
-                target.RemoveRange(minCount, targetCount - minCount);
-            }
+
+            frameCount = sourceCount;
+            version = other.version;
         }
+
         #endregion
 
         #region Stack
@@ -234,7 +238,7 @@ namespace Unity.VisualScripting
 
                 while (depth > 0)
                 {
-                    var parent = parentStack[depth - 1];
+                    var parent = frames[depth - 1].Parent;
 
                     if (parent.isSerializationRoot)
                     {
@@ -248,17 +252,23 @@ namespace Unity.VisualScripting
             }
         }
 
-        protected readonly List<IGraphParent> parentStack = new List<IGraphParent>();
+        protected GraphStackFrame[] frames = new GraphStackFrame[4];
+        protected int frameCount = 0;
 
-        protected readonly List<IGraphParentElement> parentElementStack = new List<IGraphParentElement>();
-
-        protected readonly List<IGraph> graphStack = new List<IGraph>();
-
-        protected readonly List<IGraphData> dataStack = new List<IGraphData>();
-
-        protected readonly List<IGraphDebugData> debugDataStack = new List<IGraphDebugData>();
-
-        public IEnumerable<Guid> parentElementGuids => parentElementStack.Select(parentElement => parentElement.guid);
+        public IEnumerable<Guid> parentElementGuids
+        {
+            get
+            {
+                for (int i = 0; i < frameCount; i++)
+                {
+                    var parentElement = frames[i].ParentElement;
+                    if (parentElement != null)
+                    {
+                        yield return parentElement.guid;
+                    }
+                }
+            }
+        }
 
         #endregion
 
@@ -291,7 +301,7 @@ namespace Unity.VisualScripting
 
         public bool IsWithin<T>() where T : IGraphParent
         {
-            return parent is T;
+            return _currentParentCache is T;
         }
 
         public void EnsureWithin<T>() where T : IGraphParent
@@ -302,44 +312,51 @@ namespace Unity.VisualScripting
             }
         }
 
-        public IGraphParent parent => parentStack[parentStack.Count - 1];
+        public IGraphParent parent => _currentParentCache;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T GetParent<T>() where T : IGraphParent
         {
             EnsureWithin<T>();
 
-            return (T)parent;
+            return (T)_currentParentCache;
         }
 
         public IGraphParentElement parentElement
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 EnsureChild();
-
-                return parentElementStack[parentElementStack.Count - 1];
+                return frames[frameCount - 1].ParentElement;
             }
         }
 
-        public IGraph rootGraph => graphStack[0];
+        public IGraph rootGraph => frames[0].Graph;
 
-        public IGraph graph => graphStack[graphStack.Count - 1];
+        public IGraph graph => frames[frameCount - 1].Graph;
 
         private IGraphData _currentDataCache;
+        private IGraphDebugData _currentDebugDataCache;
+        private IGraphParent _currentParentCache;
 
         protected IGraphData _data
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get => _currentDataCache;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
             {
                 version++;
-                dataStack[dataStack.Count - 1] = value;
+                ref var frame = ref frames[frameCount - 1];
+                frame.Data = value;
                 _currentDataCache = value;
             }
         }
 
         public IGraphData data
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 EnsureDataAvailable();
@@ -347,10 +364,11 @@ namespace Unity.VisualScripting
             }
         }
 
-        public IGraphData _parentData => dataStack[dataStack.Count - 2];
+        protected IGraphData _parentData => frames[frameCount - 2].Data;
 
         public bool hasData => _currentDataCache != null;
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public void EnsureDataAvailable()
         {
             if (!hasData)
@@ -389,8 +407,9 @@ namespace Unity.VisualScripting
         public static Func<IGraphRoot, IGraphDebugData> fetchRootDebugDataBinding { get; set; }
         internal static Action<IGraphRoot> releaseDebugDataBinding;
 
-        public bool hasDebugData => _debugData != null;
+        public bool hasDebugData => _currentDebugDataCache != null;
 
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public void EnsureDebugDataAvailable()
         {
             if (!hasDebugData)
@@ -401,20 +420,25 @@ namespace Unity.VisualScripting
 
         protected IGraphDebugData _debugData
         {
-            get => debugDataStack[debugDataStack.Count - 1];
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _currentDebugDataCache;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
             {
                 version++;
-                debugDataStack[debugDataStack.Count - 1] = value;
+                ref var frame = ref frames[frameCount - 1];
+                frame.DebugData = value;
+                _currentDebugDataCache = value;
             }
         }
 
         public IGraphDebugData debugData
         {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
             get
             {
                 EnsureDebugDataAvailable();
-                return _debugData;
+                return _currentDebugDataCache;
             }
         }
 
@@ -447,7 +471,7 @@ namespace Unity.VisualScripting
 
         #region Traversal
 
-        protected bool TryEnterParentElement(Guid parentElementGuid, out string error, int? maxRecursionDepth = null)
+        protected bool TryEnterParentElement(Guid parentElementGuid, out string error, int maxRecursionDepth = -1)
         {
             if (!graph.elements.TryGetValue(parentElementGuid, out var element))
             {
@@ -466,7 +490,7 @@ namespace Unity.VisualScripting
             return TryEnterParentElement(parentElement, out error, maxRecursionDepth);
         }
 
-        protected bool TryEnterParentElement(IGraphParentElement parentElement, out string error, int? maxRecursionDepth = null, bool skipContainsCheck = false)
+        protected bool TryEnterParentElement(IGraphParentElement parentElement, out string error, int maxRecursionDepth = -1, bool skipContainsCheck = false)
         {
             if (!skipContainsCheck && parentElement.graph != graph)
             {
@@ -484,21 +508,21 @@ namespace Unity.VisualScripting
 
             if (Recursion.safeMode)
             {
-                var recursionDepth = 0;
-                var _maxRecursionDepth = maxRecursionDepth ?? Recursion.defaultMaxDepth;
+                int _maxRecursionDepth = maxRecursionDepth >= 0 ? maxRecursionDepth : Recursion.defaultMaxDepth;
+                int recursionDepth = 0;
+                int stackCount = frameCount;
 
-                foreach (var parentGraph in graphStack)
+                for (int i = stackCount - 1; i >= 0; i--)
                 {
-                    if (parentGraph == childGraph)
+                    if (frames[i].Graph == childGraph)
                     {
                         recursionDepth++;
+                        if (recursionDepth > _maxRecursionDepth)
+                        {
+                            error = $"Max recursion depth of {_maxRecursionDepth} has been exceeded. Are you nesting a graph within itself?\nIf not, consider increasing '{nameof(Recursion)}.{nameof(Recursion.defaultMaxDepth)}'.";
+                            return false;
+                        }
                     }
-                }
-
-                if (recursionDepth > _maxRecursionDepth)
-                {
-                    error = $"Max recursion depth of {_maxRecursionDepth} has been exceeded. Are you nesting a graph within itself?\nIf not, consider increasing '{nameof(Recursion)}.{nameof(Recursion.defaultMaxDepth)}'.";
-                    return false;
                 }
             }
 
@@ -528,20 +552,37 @@ namespace Unity.VisualScripting
             version++;
             var childGraph = parentElement.childGraph;
 
-            parentStack.Add(parentElement);
-            parentElementStack.Add(parentElement);
-            graphStack.Add(childGraph);
+            if (frameCount >= frames.Length)
+            {
+                Array.Resize(ref frames, frames.Length * 2);
+            }
 
             IGraphData childGraphData = null;
             _data?.TryGetChildGraphData(parentElement, out childGraphData);
-            dataStack.Add(childGraphData);
-
             _currentDataCache = childGraphData;
 
-            var childGraphDebugData = _debugData?.GetOrCreateChildGraphData(parentElement);
-            debugDataStack.Add(childGraphDebugData);
+            IGraphDebugData childGraphDebugData = null;
+            if (_debugData != null)
+            {
+                childGraphDebugData = _debugData.GetOrCreateChildGraphData(parentElement);
+                _currentDebugDataCache = childGraphDebugData;
+            }
+            else
+            {
+                _currentDebugDataCache = null;
+            }
 
-            depth = parentStack.Count;
+            _currentParentCache = parentElement;
+
+            ref var frame = ref frames[frameCount];
+            frame.Parent = parentElement;
+            frame.ParentElement = parentElement;
+            frame.Graph = childGraph;
+            frame.Data = childGraphData;
+            frame.DebugData = childGraphDebugData;
+
+            frameCount++;
+            depth = frameCount;
         }
 
         protected void ExitParentElement()
@@ -552,16 +593,30 @@ namespace Unity.VisualScripting
             }
 
             version++;
+            frameCount--;
 
-            parentStack.RemoveAt(parentStack.Count - 1);
-            parentElementStack.RemoveAt(parentElementStack.Count - 1);
-            graphStack.RemoveAt(graphStack.Count - 1);
-            dataStack.RemoveAt(dataStack.Count - 1);
-            debugDataStack.RemoveAt(debugDataStack.Count - 1);
+            ref var discardedFrame = ref frames[frameCount];
+            discardedFrame.Parent = null;
+            discardedFrame.ParentElement = null;
+            discardedFrame.Graph = null;
+            discardedFrame.Data = null;
+            discardedFrame.DebugData = null;
 
-            _currentDataCache = dataStack[dataStack.Count - 1];
+            if (frameCount > 0)
+            {
+                ref var activeFrame = ref frames[frameCount - 1];
+                _currentDataCache = activeFrame.Data;
+                _currentDebugDataCache = activeFrame.DebugData;
+                _currentParentCache = activeFrame.Parent;
+            }
+            else
+            {
+                _currentDataCache = null;
+                _currentDebugDataCache = null;
+                _currentParentCache = null;
+            }
 
-            depth = parentStack.Count;
+            depth = frameCount;
         }
 
         #endregion
@@ -575,42 +630,30 @@ namespace Unity.VisualScripting
             {
                 try
                 {
-                    if (rootObject == null)
-                    {
-                        // Root object has been destroyed
-                        return false;
-                    }
+                    if (rootObject == null) return false;
+                    if (rootGraph != root.childGraph) return false;
+                    if (serializedObject == null) return false;
 
-                    if (rootGraph != root.childGraph)
-                    {
-                        // Root graph has changed
-                        return false;
-                    }
+                    int currentDepth = this.depth;
 
-                    if (serializedObject == null)
+                    for (var d = 1; d < currentDepth; d++)
                     {
-                        // Serialized object has been destroyed
-                        return false;
-                    }
+                        ref readonly var parentFrame = ref frames[d - 1];
+                        ref readonly var childFrame = ref frames[d];
 
-                    for (var depth = 1; depth < this.depth; depth++)
-                    {
-                        var parentElement = parentElementStack[depth - 1];
-                        var parentGraph = graphStack[depth - 1];
-                        var childGraph = graphStack[depth];
+                        var parentElement = childFrame.ParentElement;
+                        var parentGraph = parentFrame.Graph;
+                        var childGraph = childFrame.Graph;
 
-                        // Important to check by object and not by GUID here,
-                        // because object stack integrity has to be guaranteed
-                        // (GUID integrity is implied because they're immutable)
-                        if (!parentGraph.elements.Contains(parentElement))
+                        if (parentElement == null) return false;
+
+                        if (parentGraph != parentElement.graph)
                         {
-                            // Parent graph no longer contains the parent element
                             return false;
                         }
 
                         if (parentElement.childGraph != childGraph)
                         {
-                            // Child graph has changed
                             return false;
                         }
                     }
@@ -643,23 +686,19 @@ namespace Unity.VisualScripting
             if (ReferenceEquals(this, other)) return true;
             if (other == null) return false;
 
-            if (depth != other.depth || rootGraph != other.rootGraph) return false;
-
-            if (!UnityObjectUtility.TrulyEqual(rootObject, other.rootObject)) return false;
-
             int currentDepth = depth;
+            if (currentDepth != other.depth || rootGraph != other.rootGraph) return false;
+            if (!UnityObjectUtility.TrulyEqual(rootObject, other.rootObject)) return false;
             if (currentDepth == 0) return true;
-
-            var dataStack = this.dataStack;
-            var otherDataStack = other.dataStack;
-            var parentElementStack = this.parentElementStack;
-            var otherParentStack = other.parentElementStack;
 
             for (int d = currentDepth - 1; d >= 0; d--)
             {
-                if (dataStack[d] != otherDataStack[d]) return false;
+                ref readonly var localFrame = ref this.frames[d];
+                ref readonly var otherFrame = ref other.frames[d];
 
-                if (d > 0 && parentElementStack[d - 1] != otherParentStack[d - 1]) return false;
+                if (localFrame.Data != otherFrame.Data) return false;
+
+                if (d > 0 && localFrame.ParentElement != otherFrame.ParentElement) return false;
             }
 
             return true;
@@ -667,29 +706,15 @@ namespace Unity.VisualScripting
 
         public bool DefinitionEquals(GraphPointer other)
         {
-            if (other == null)
+            if (other == null) return false;
+            if (rootGraph != other.rootGraph) return false;
+
+            int currentDepth = this.depth;
+            if (currentDepth != other.depth) return false;
+
+            for (int d = 1; d < currentDepth; d++)
             {
-                return false;
-            }
-
-            if (rootGraph != other.rootGraph)
-            {
-                return false;
-            }
-
-            var depth = this.depth; // Micro optimization
-
-            if (depth != other.depth)
-            {
-                return false;
-            }
-
-            for (int d = 1; d < depth; d++)
-            {
-                var parentElement = parentElementStack[d - 1];
-                var otherParentElement = other.parentElementStack[d - 1];
-
-                if (parentElement != otherParentElement)
+                if (this.frames[d - 1].ParentElement != other.frames[d - 1].ParentElement)
                 {
                     return false;
                 }
@@ -697,6 +722,7 @@ namespace Unity.VisualScripting
 
             return true;
         }
+
         public int ComputeHashCode()
         {
             var hash = new HashCode();
@@ -711,11 +737,15 @@ namespace Unity.VisualScripting
                 hash.Add(rootGraph.GetHashCode());
             }
 
-            var depth = this.depth;
+            int currentDepth = this.depth;
 
-            for (int d = 1; d < depth; d++)
+            for (int d = 1; d < currentDepth; d++)
             {
-                hash.Add(parentElementStack[d - 1].guid);
+                var element = frames[d - 1].ParentElement;
+                if (element != null)
+                {
+                    hash.Add(element.guid);
+                }
             }
 
             return hash.ToHashCode();
@@ -730,24 +760,22 @@ namespace Unity.VisualScripting
             var sb = new StringBuilder();
 
             sb.Append("[ ");
-
             sb.Append(rootObject.ToSafeString());
 
-            for (var depth = 1; depth < this.depth; depth++)
+            int currentDepth = this.depth;
+
+            for (var d = 1; d < currentDepth; d++)
             {
                 sb.Append(" > ");
 
-                var parentElementIndex = depth - 1;
-
-                if (parentElementIndex >= parentElementStack.Count)
+                if (d >= frameCount)
                 {
-                    sb.Append("?");
-                    break;
+                    sb.Append('?');
+                    continue;
                 }
 
-                var parentElement = parentElementStack[parentElementIndex];
-
-                sb.Append(parentElement);
+                var parentElement = frames[d].ParentElement;
+                sb.Append(parentElement != null ? parentElement.ToString() : "null");
             }
 
             sb.Append(" ]");

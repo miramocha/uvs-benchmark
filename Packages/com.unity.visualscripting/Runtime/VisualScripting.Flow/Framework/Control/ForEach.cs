@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Runtime.CompilerServices;
 
 namespace Unity.VisualScripting
 {
@@ -79,87 +80,27 @@ namespace Unity.VisualScripting
         protected override ControlOutput Loop(Flow flow)
         {
             var rawCollection = flow.GetValueData(collection).ToObject();
-
             if (rawCollection == null) return exit;
 
             var loop = flow.EnterLoop();
             var stack = flow.PreserveStack();
-            int index = 0;
-            IDictionaryEnumerator dictionaryEnumerator = null;
             IEnumerator enumerator = null;
 
             try
             {
-                if (dictionary)
+                if (dictionary && rawCollection is IDictionary dict)
                 {
-                    if (rawCollection is IDictionary dict)
-                    {
-                        dictionaryEnumerator = dict.GetEnumerator();
-                        enumerator = dictionaryEnumerator;
-
-                        while (flow.LoopIsNotBroken(loop) && dictionaryEnumerator.MoveNext())
-                        {
-
-                            flow.SetValue(currentKey, dictionaryEnumerator.Key);
-                            flow.SetValue(currentItem, dictionaryEnumerator.Value);
-                            flow.SetValue(currentIndex, index);
-
-                            flow.Invoke(body);
-
-                            flow.RestoreStack(stack);
-
-                            index++;
-                        }
-                    }
-                    else if (rawCollection is IEnumerable enumerable)
-                    {
-                        enumerator = enumerable.GetEnumerator();
-                        while (flow.LoopIsNotBroken(loop) && enumerator.MoveNext())
-                        {
-                            flow.SetValue(currentItem, enumerator.Current);
-                            flow.SetValue(currentIndex, index);
-
-                            flow.Invoke(body);
-
-                            flow.RestoreStack(stack);
-
-                            index++;
-                        }
-                    }
+                    enumerator = dict.GetEnumerator();
+                    LoopDictionary(flow, loop, stack, (IDictionaryEnumerator)enumerator);
                 }
-                else
+                else if (!dictionary && rawCollection is IList list)
                 {
-                    if (rawCollection is IList list)
-                    {
-                        var count = list.Count;
-                        for (index = 0; index < count; index++)
-                        {
-                            if (!flow.LoopIsNotBroken(loop)) break;
-
-                            flow.SetValue(currentItem, list[index]);
-                            flow.SetValue(currentIndex, index);
-                            flow.Invoke(body);
-
-                            flow.RestoreStack(stack);
-
-                        }
-                    }
-                    else if (rawCollection is IEnumerable enumerable)
-                    {
-                        enumerator = enumerable.GetEnumerator();
-
-                        while (flow.LoopIsNotBroken(loop) && enumerator.MoveNext())
-                        {
-                            flow.SetValue(currentItem, enumerator.Current);
-                            flow.SetValue(currentIndex, index);
-
-                            flow.Invoke(body);
-
-                            flow.RestoreStack(stack);
-
-                            index++;
-                        }
-                    }
+                    LoopList(flow, loop, stack, list);
+                }
+                else if (rawCollection is IEnumerable enumerable)
+                {
+                    enumerator = enumerable.GetEnumerator();
+                    LoopEnumerable(flow, loop, stack, enumerator);
                 }
             }
             catch
@@ -170,12 +111,72 @@ namespace Unity.VisualScripting
             finally
             {
                 (enumerator as IDisposable)?.Dispose();
-                (dictionaryEnumerator as IDisposable)?.Dispose();
                 flow.DisposePreservedStack(stack);
                 flow.ExitLoop(loop);
             }
 
             return exit;
+        }
+
+        private void LoopDictionary(Flow flow, int loop, GraphStack stack, IDictionaryEnumerator dictEnum)
+        {
+            int index = 0;
+
+            var keyItem = new ParameterValue((object)null);
+            var valueItem = new ParameterValue((object)null);
+
+            flow.SetValue(currentKey, keyItem);
+            flow.SetValue(currentItem, valueItem);
+
+            while (flow.LoopIsNotBroken(loop) && dictEnum.MoveNext())
+            {
+                keyItem.UpdateObject(dictEnum.Key);
+                valueItem.UpdateObject(dictEnum.Value);
+                flow.SetValue(currentIndex, index);
+
+                flow.Invoke(body);
+                flow.RestoreStack(stack);
+
+                index++;
+            }
+        }
+
+        private void LoopList(Flow flow, int loop, GraphStack stack, IList list)
+        {
+            int count = list.Count;
+
+            var item = new ParameterValue(list.Count > 0 ? list[0] : null);
+            flow.SetValue(currentItem, item);
+
+            for (int index = 0; index < count; index++)
+            {
+                if (!flow.LoopIsNotBroken(loop)) break;
+
+                item.UpdateObject(list[index]);
+                flow.SetValue(currentIndex, index);
+
+                flow.Invoke(body);
+                flow.RestoreStack(stack);
+            }
+        }
+
+        private void LoopEnumerable(Flow flow, int loop, GraphStack stack, IEnumerator enumerator)
+        {
+            int index = 0;
+
+            var item = new ParameterValue((object)null);
+            flow.SetValue(currentItem, item);
+
+            while (flow.LoopIsNotBroken(loop) && enumerator.MoveNext())
+            {
+                item.UpdateObject(enumerator.Current);
+                flow.SetValue(currentIndex, index);
+
+                flow.Invoke(body);
+                flow.RestoreStack(stack);
+
+                index++;
+            }
         }
 
         protected override IEnumerator LoopCoroutine(Flow flow)
@@ -191,83 +192,74 @@ namespace Unity.VisualScripting
             var loop = flow.EnterLoop();
             var stack = flow.PreserveStack();
             int index = 0;
-            IDictionaryEnumerator dictionaryEnumerator = null;
             IEnumerator enumerator = null;
 
             try
             {
-                if (dictionary)
+                if (dictionary && rawCollection is IDictionary dict)
                 {
-                    if (rawCollection is IDictionary dict)
+                    var dictEnum = dict.GetEnumerator();
+                    enumerator = dictEnum;
+
+                    var keyItem = new ParameterValue((object)null);
+                    var valueItem = new ParameterValue((object)null);
+                    flow.SetValue(currentKey, keyItem);
+                    flow.SetValue(currentItem, valueItem);
+
+                    while (flow.LoopIsNotBroken(loop) && dictEnum.MoveNext())
                     {
-                        dictionaryEnumerator = dict.GetEnumerator();
-                        enumerator = dictionaryEnumerator;
+                        keyItem.UpdateObject(dictEnum.Key);
+                        valueItem.UpdateObject(dictEnum.Value);
+                        flow.SetValue(currentIndex, index);
 
-                        while (flow.LoopIsNotBroken(loop) && dictionaryEnumerator.MoveNext())
-                        {
-                            flow.SetValue(currentKey, dictionaryEnumerator.Key);
-                            flow.SetValue(currentItem, dictionaryEnumerator.Value);
-                            flow.SetValue(currentIndex, index);
+                        yield return body;
 
-                            yield return body;
-
-                            flow.RestoreStack(stack);
-                            index++;
-                        }
-                    }
-                    else if (rawCollection is IEnumerable enumerable)
-                    {
-                        enumerator = enumerable.GetEnumerator();
-                        while (flow.LoopIsNotBroken(loop) && enumerator.MoveNext())
-                        {
-                            flow.SetValue(currentItem, enumerator.Current);
-                            flow.SetValue(currentIndex, index);
-
-                            yield return body;
-
-                            flow.RestoreStack(stack);
-
-                            index++;
-                        }
+                        flow.RestoreStack(stack);
+                        index++;
                     }
                 }
-                else
+                else if (!dictionary && rawCollection is IList list)
                 {
-                    if (rawCollection is IList list)
+                    int count = list.Count;
+
+                    var item = new ParameterValue(list.Count > 0 ? list[0] : null);
+                    flow.SetValue(currentItem, item);
+
+                    for (index = 0; index < count; index++)
                     {
-                        for (index = 0; index < list.Count; index++)
-                        {
-                            if (!flow.LoopIsNotBroken(loop)) break;
+                        if (!flow.LoopIsNotBroken(loop)) break;
 
-                            flow.SetValue(currentItem, list[index]);
-                            flow.SetValue(currentIndex, index);
+                        item.UpdateObject(list[index]);
+                        flow.SetValue(currentIndex, index);
 
-                            yield return body;
+                        yield return body;
 
-                            flow.RestoreStack(stack);
-                        }
+                        flow.RestoreStack(stack);
                     }
-                    else if (rawCollection is IEnumerable enumerable)
+                }
+                else if (rawCollection is IEnumerable enumerable)
+                {
+                    enumerator = enumerable.GetEnumerator();
+
+                    var item = new ParameterValue((object)null);
+                    flow.SetValue(currentItem, item);
+
+                    while (flow.LoopIsNotBroken(loop) && enumerator.MoveNext())
                     {
-                        enumerator = enumerable.GetEnumerator();
+                        item.UpdateObject(enumerator.Current);
+                        flow.SetValue(currentIndex, index);
 
-                        while (flow.LoopIsNotBroken(loop) && enumerator.MoveNext())
-                        {
-                            flow.SetValue(currentItem, enumerator.Current);
-                            flow.SetValue(currentIndex, index);
+                        yield return body;
 
-                            yield return body;
-
-                            flow.RestoreStack(stack);
-                            index++;
-                        }
+                        flow.RestoreStack(stack);
+                        index++;
                     }
                 }
             }
             finally
             {
+                flow.RestoreStack(stack);
                 (enumerator as IDisposable)?.Dispose();
-                (dictionaryEnumerator as IDisposable)?.Dispose();
                 flow.DisposePreservedStack(stack);
                 flow.ExitLoop(loop);
             }

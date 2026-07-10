@@ -1,10 +1,9 @@
 using System;
-using System.Linq.Expressions;
 using System.Reflection;
 
 namespace Unity.VisualScripting
 {
-    public class StaticPropertyAccessor<TProperty> : OptimizedAccessorBase
+    public sealed unsafe class StaticPropertyAccessor<TProperty> : OptimizedAccessorBase
     {
         public StaticPropertyAccessor(PropertyInfo propertyInfo)
         {
@@ -31,9 +30,9 @@ namespace Unity.VisualScripting
         }
 
         private readonly PropertyInfo propertyInfo;
-        private Func<TProperty> getter;
-        private Action<TProperty> setter;
-        private Type targetType;
+        private delegate*<TProperty> getter;
+        private delegate*<TProperty, void> setter;
+        private readonly Type targetType;
 
         public override void Compile()
         {
@@ -42,12 +41,12 @@ namespace Unity.VisualScripting
 
             if (getterInfo != null)
             {
-                getter = (Func<TProperty>)getterInfo.CreateDelegate(typeof(Func<TProperty>));
+                getter = (delegate*<TProperty>)getterInfo.MethodHandle.GetFunctionPointer();
             }
 
             if (setterInfo != null)
             {
-                setter = (Action<TProperty>)setterInfo.CreateDelegate(typeof(Action<TProperty>));
+                setter = (delegate*<TProperty, void>)setterInfo.MethodHandle.GetFunctionPointer();
             }
         }
 

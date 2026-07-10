@@ -49,52 +49,59 @@ namespace Unity.VisualScripting
 
     public static class GraphStackPool
     {
-        private static readonly Stack<GraphStack> _free = new Stack<GraphStack>(32);
+        private static readonly object @lock = new object();
+        private static readonly Stack<GraphStack> _free = new Stack<GraphStack>();
 
         public static GraphStack New(IGraphRoot root, List<IGraphParentElement> parentElements, Func<GraphStack> constructor)
         {
-            GraphStack instance;
-
-            if (_free.Count > 0)
+            lock (@lock)
             {
-                instance = _free.Pop();
-            }
-            else
-            {
-                instance = constructor();
-            }
+                GraphStack instance;
+                if (_free.Count > 0)
+                {
+                    instance = _free.Pop();
+                }
+                else
+                {
+                    instance = constructor();
+                }
 
-            instance.InitializeNoAlloc(root, parentElements, true);
+                instance.InitializeNoAlloc(root, parentElements, true);
 
-            return instance;
+                return instance;
+            }
         }
 
         public static GraphStack New(GraphPointer source, Func<GraphStack> constructor)
         {
-            GraphStack instance;
-
-            if (_free.Count > 0)
+            lock (@lock)
             {
-                instance = _free.Pop();
-            }
-            else
-            {
-                instance = constructor();
-            }
+                GraphStack instance;
+                if (_free.Count > 0)
+                {
+                    instance = _free.Pop();
+                }
+                else
+                {
+                    instance = constructor();
+                }
 
-            instance.CopyFrom(source, true);
+                instance.CopyFrom(source, true);
 
-            return instance;
+                return instance;
+            }
         }
 
         public static void Free(GraphStack stack)
         {
             if (stack == null) return;
-
-            if (!_free.Contains(stack))
+            lock (@lock)
             {
-                (stack as IPoolable).Free();
-                _free.Push(stack);
+                if (!_free.Contains(stack))
+                {
+                    (stack as IPoolable).Free();
+                    _free.Push(stack);
+                }
             }
         }
     }

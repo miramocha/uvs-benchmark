@@ -1,14 +1,18 @@
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Unity.VisualScripting
 {
     public sealed class StaticFunctionInvoker<TParam0, TParam1, TParam2, TParam3, TParam4, TResult> : StaticFunctionInvokerBase<TResult>
     {
-        public StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo) { }
+        public unsafe StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo)
+        {
+            invoke = (delegate*<TParam0, TParam1, TParam2, TParam3, TParam4, TResult>)methodInfo.MethodHandle.GetFunctionPointer();
+        }
 
-        private Func<TParam0, TParam1, TParam2, TParam3, TParam4, TResult> invoke;
+        private readonly unsafe delegate*<TParam0, TParam1, TParam2, TParam3, TParam4, TResult> invoke;
 
         public override object Invoke(object target, params object[] args)
         {
@@ -31,14 +35,14 @@ namespace Unity.VisualScripting
 
                 try
                 {
-                    return InvokeUnsafe(target, arg0, arg1, arg2, arg3, arg4);
+                    return InvokeUnsafe(arg0, arg1, arg2, arg3, arg4);
                 }
                 catch (TargetInvocationException) { throw; }
                 catch (Exception ex) { throw new TargetInvocationException(ex); }
             }
             else
             {
-                return InvokeUnsafe(target, arg0, arg1, arg2, arg3, arg4);
+                return InvokeUnsafe(arg0, arg1, arg2, arg3, arg4);
             }
         }
 
@@ -51,17 +55,18 @@ namespace Unity.VisualScripting
         {
             return Invoke(target, args[0], args[1], args[2], args[3], args[4]);
         }
-
-        public object InvokeUnsafe(object target, object arg0, object arg1, object arg2, object arg3, object arg4)
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe object InvokeUnsafe(object arg0, object arg1, object arg2, object arg3, object arg4)
         {
             return invoke((TParam0)arg0, (TParam1)arg1, (TParam2)arg2, (TParam3)arg3, (TParam4)arg4);
         }
-
-        public ParameterValue InvokeUnsafe(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe ParameterValue InvokeUnsafe(ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
         {
             return ParameterValue.Create(invoke(arg0.Cast<TParam0>(), arg1.Cast<TParam1>(), arg2.Cast<TParam2>(), arg3.Cast<TParam3>(), arg4.Cast<TParam4>()));
         }
-
 
         public override ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
         {
@@ -76,14 +81,14 @@ namespace Unity.VisualScripting
 
                 try
                 {
-                    return InvokeUnsafe(target, arg0, arg1, arg2, arg3, arg4);
+                    return InvokeUnsafe(arg0, arg1, arg2, arg3, arg4);
                 }
                 catch (TargetInvocationException) { throw; }
                 catch (Exception ex) { throw new TargetInvocationException(ex); }
             }
             else
             {
-                return InvokeUnsafe(target, arg0, arg1, arg2, arg3, arg4);
+                return InvokeUnsafe(arg0, arg1, arg2, arg3, arg4);
             }
         }
 
@@ -94,13 +99,10 @@ namespace Unity.VisualScripting
 
         protected override void CompileExpression(MethodCallExpression callExpression, ParameterExpression[] parameterExpressions)
         {
-            invoke = Expression.Lambda<Func<TParam0, TParam1, TParam2, TParam3, TParam4, TResult>>(callExpression, parameterExpressions).Compile();
         }
 
         protected override void CreateDelegate()
         {
-            invoke = (Func<TParam0, TParam1, TParam2, TParam3, TParam4, TResult>)methodInfo.CreateDelegate(
-                    typeof(Func<TParam0, TParam1, TParam2, TParam3, TParam4, TResult>));
         }
     }
 }

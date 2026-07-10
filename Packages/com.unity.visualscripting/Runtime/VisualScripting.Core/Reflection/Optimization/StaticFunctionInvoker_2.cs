@@ -1,14 +1,18 @@
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Unity.VisualScripting
 {
     public sealed class StaticFunctionInvoker<TParam0, TParam1, TResult> : StaticFunctionInvokerBase<TResult>
     {
-        public StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo) { }
+        public unsafe StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo)
+        {
+            invoke = (delegate*<TParam0, TParam1, TResult>)methodInfo.MethodHandle.GetFunctionPointer();
+        }
 
-        private Func<TParam0, TParam1, TResult> invoke;
+        private readonly unsafe delegate*<TParam0, TParam1, TResult> invoke;
 
         public override object Invoke(object target, params object[] args)
         {
@@ -49,12 +53,14 @@ namespace Unity.VisualScripting
             return Invoke(target, args[0], args[1]);
         }
 
-        public object InvokeUnsafe(object target, object arg0, object arg1)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe object InvokeUnsafe(object target, object arg0, object arg1)
         {
             return invoke((TParam0)arg0, (TParam1)arg1);
         }
 
-        public ParameterValue InvokeUnsafe(ParameterValue target, ParameterValue arg0, ParameterValue arg1)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public unsafe ParameterValue InvokeUnsafe(ParameterValue target, ParameterValue arg0, ParameterValue arg1)
         {
             return ParameterValue.Create(invoke(arg0.Cast<TParam0>(), arg1.Cast<TParam1>()));
         }
@@ -87,12 +93,10 @@ namespace Unity.VisualScripting
 
         protected override void CompileExpression(MethodCallExpression callExpression, ParameterExpression[] parameterExpressions)
         {
-            invoke = Expression.Lambda<Func<TParam0, TParam1, TResult>>(callExpression, parameterExpressions).Compile();
         }
 
         protected override void CreateDelegate()
         {
-            invoke = (Func<TParam0, TParam1, TResult>)methodInfo.CreateDelegate(typeof(Func<TParam0, TParam1, TResult>));
         }
     }
 }

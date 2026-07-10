@@ -34,33 +34,94 @@ namespace Unity.VisualScripting
     /// </example>
     public static class EventBus
     {
-        static EventBus()
+        private static readonly Dictionary<EventHook, HandlerList> events;
+
+        internal static Dictionary<EventHook, List<Delegate>> testAccessEvents
         {
-            events = new Dictionary<EventHook, HashSet<Delegate>>(256, new EventHookComparer());
+            get
+            {
+                var dict = new Dictionary<EventHook, List<Delegate>>();
+                foreach (var kvp in events)
+                {
+                    dict[kvp.Key] = kvp.Value.Handlers;
+                }
+                return dict;
+            }
         }
 
-        private static readonly Dictionary<EventHook, HashSet<Delegate>> events;
-        internal static Dictionary<EventHook, HashSet<Delegate>> testAccessEvents => events;
+        static EventBus()
+        {
+            events = new Dictionary<EventHook, HandlerList>(256, new EventHookComparer());
+        }
+
+        private class HandlerList
+        {
+            public readonly List<Delegate> Handlers = new List<Delegate>();
+            public int InvokeDepth;
+            public bool NeedsCleanup;
+
+            public void Add(Delegate handler)
+            {
+                if (!Handlers.Contains(handler))
+                {
+                    Handlers.Add(handler);
+                }
+            }
+
+            public bool Remove(Delegate handler)
+            {
+                int index = Handlers.IndexOf(handler);
+                if (index < 0) return false;
+
+                if (InvokeDepth > 0)
+                {
+                    Handlers[index] = null;
+                    NeedsCleanup = true;
+                }
+                else
+                {
+                    Handlers.RemoveAt(index);
+                }
+                return true;
+            }
+
+            public void Cleanup()
+            {
+                if (NeedsCleanup && InvokeDepth == 0)
+                {
+                    int writeIndex = 0;
+                    for (int readIndex = 0; readIndex < Handlers.Count; readIndex++)
+                    {
+                        if (Handlers[readIndex] != null)
+                        {
+                            Handlers[writeIndex++] = Handlers[readIndex];
+                        }
+                    }
+
+                    Handlers.RemoveRange(writeIndex, Handlers.Count - writeIndex);
+                    NeedsCleanup = false;
+                }
+            }
+        }
 
         public static void Register<TArgs>(EventHook hook, Action<TArgs> handler)
         {
-            if (!events.TryGetValue(hook, out var handlers))
+            if (!events.TryGetValue(hook, out var list))
             {
-                handlers = new HashSet<Delegate>();
-                events.Add(hook, handlers);
+                list = new HandlerList();
+                events.Add(hook, list);
             }
 
-            handlers.Add(handler);
+            list.Add(handler);
         }
 
         public static void Unregister(EventHook hook, Delegate handler)
         {
-            if (events.TryGetValue(hook, out var handlers))
+            if (events.TryGetValue(hook, out var list))
             {
-                if (handlers.Remove(handler))
+                if (list.Remove(handler))
                 {
-                    // Free the key references for GC collection
-                    if (handlers.Count == 0)
+                    if (list.Handlers.Count == 0 && list.InvokeDepth == 0)
                     {
                         events.Remove(hook);
                     }
@@ -70,37 +131,35 @@ namespace Unity.VisualScripting
 
         public static void Trigger<TArgs>(EventHook hook, TArgs args)
         {
-            HashSet<Action<TArgs>> handlers = null;
-
-            if (events.TryGetValue(hook, out var potentialHandlers))
+            if (!events.TryGetValue(hook, out var list))
             {
-                foreach (var potentialHandler in potentialHandlers)
-                {
-                    if (potentialHandler is Action<TArgs> handler)
-                    {
-                        if (handlers == null)
-                        {
-                            handlers = HashSetPool<Action<TArgs>>.New();
-                        }
+                return;
+            }
 
-                        handlers.Add(handler);
-                    }
+            list.InvokeDepth++;
+
+            int count = list.Handlers.Count;
+
+            for (int i = 0; i < count; i++)
+            {
+                var del = list.Handlers[i];
+
+                if (del != null && del is Action<TArgs> handler)
+                {
+                    handler.Invoke(args);
                 }
             }
 
-            if (handlers != null)
+            list.InvokeDepth--;
+
+            if (list.InvokeDepth == 0 && list.NeedsCleanup)
             {
-                foreach (var handler in handlers)
+                list.Cleanup();
+
+                if (list.Handlers.Count == 0)
                 {
-                    if (!potentialHandlers.Contains(handler))
-                    {
-                        continue;
-                    }
-
-                    handler.Invoke(args);
+                    events.Remove(hook);
                 }
-
-                handlers.Free();
             }
         }
 
@@ -128,7 +187,7 @@ namespace Unity.VisualScripting
 
         internal static bool WillRemoveHook(EventHook hook)
         {
-            return events.TryGetValue(hook, out var handlers) && handlers.Count == 1;
+            return events.TryGetValue(hook, out var list) && list.Handlers.Count == 1;
         }
     }
 }

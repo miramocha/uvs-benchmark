@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Unity.Profiling;
 using UnityEngine;
 
 namespace Unity.VisualScripting
@@ -6,7 +8,72 @@ namespace Unity.VisualScripting
         where TGraph : class, IGraph, new()
         where TMacro : Macro<TGraph>, new()
     {
+#if ENABLE_UVS_PROFILING
+        private static readonly Dictionary<string, ProfilerMarker> RegisteredEventMarkers = new Dictionary<string, ProfilerMarker>();
+        private static readonly Dictionary<string, ProfilerMarker> UnregisteredEventMarkers = new Dictionary<string, ProfilerMarker>();
 
+        private static ProfilerMarker GetOrCreateMarker(string name, bool isRegistered, GraphReference reference)
+        {
+            var cache = isRegistered ? RegisteredEventMarkers : UnregisteredEventMarkers;
+            if (!cache.TryGetValue(name, out var marker))
+            {
+                marker = new ProfilerMarker($"[{name}] {Graph.GetGraphName(reference)}");
+                cache[name] = marker;
+            }
+            return marker;
+        }
+
+        protected void TriggerEvent(string name)
+        {
+            if (hasGraph)
+            {
+                var marker = GetOrCreateMarker(name, isRegistered: true, reference);
+                try
+                {
+                    marker.Begin(this);
+                    TriggerRegisteredEvent(new EventHook(name, this), new EmptyEventArgs());
+                }
+                finally
+                {
+                    marker.End();
+                }
+            }
+        }
+
+        protected void TriggerEvent<TArgs>(string name, TArgs args)
+        {
+            if (hasGraph)
+            {
+                var marker = GetOrCreateMarker(name, isRegistered: true, reference);
+                try
+                {
+                    marker.Begin(this);
+                    TriggerRegisteredEvent(new EventHook(name, this), args);
+                }
+                finally
+                {
+                    marker.End();
+                }
+            }
+        }
+
+        protected void TriggerUnregisteredEvent(string name)
+        {
+            if (hasGraph)
+            {
+                var marker = GetOrCreateMarker(name, isRegistered: false, reference);
+                try
+                {
+                    marker.Begin(this);
+                    TriggerUnregisteredEvent(name, new EmptyEventArgs());
+                }
+                finally
+                {
+                    marker.End();
+                }
+            }
+        }
+#else
         protected void TriggerEvent(string name)
         {
             if (hasGraph)
@@ -30,6 +97,7 @@ namespace Unity.VisualScripting
                 TriggerUnregisteredEvent(name, new EmptyEventArgs());
             }
         }
+#endif
 
         protected virtual void TriggerRegisteredEvent<TArgs>(EventHook hook, TArgs args)
         {

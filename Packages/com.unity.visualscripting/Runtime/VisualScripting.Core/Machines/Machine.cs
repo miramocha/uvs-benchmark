@@ -17,34 +17,6 @@ namespace Unity.VisualScripting
         [Serialize]
         public GraphNest<TGraph, TMacro> nest { get; private set; } = new GraphNest<TGraph, TMacro>();
 
-        [Serialize]
-        public bool UseCompiledGraph { get; private set; }
-
-        [Serialize]
-        private string _compiledTypeName;
-
-        [DoNotSerialize]
-        private Behaviour _compiledComponent;
-
-        public System.Type compiledType
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(_compiledTypeName)) return null;
-                return System.Type.GetType(_compiledTypeName);
-            }
-            set
-            {
-                _compiledTypeName = value?.AssemblyQualifiedName;
-            }
-        }
-
-        [Serialize, HideInInspector]
-        public List<UnityObject> compiledReferences;
-
-        [Serialize, HideInInspector]
-        public List<string> compiledReferenceNames;
-
         [DoNotSerialize]
         IGraphNest IGraphNester.nest => nest;
 
@@ -74,7 +46,7 @@ namespace Unity.VisualScripting
         protected GraphReference reference => isReferenceCached ? _reference : GraphReference.New(this, false);
 
         [DoNotSerialize]
-        protected bool hasGraph => !UseCompiledGraph && reference != null;
+        protected bool hasGraph => reference != null;
 
         [DoNotSerialize]
         public TGraph graph => nest.graph;
@@ -118,44 +90,6 @@ namespace Unity.VisualScripting
             _alive = true;
             threadSafeGameObject = gameObject;
 
-            if (UseCompiledGraph)
-            {
-                var type = compiledType;
-                if (type != null)
-                {
-                    if (gameObject.TryGetComponent(type, out var component))
-                    {
-                        _compiledComponent = (Behaviour)component;
-                    }
-                    else
-                    {
-                        _compiledComponent = (Behaviour)gameObject.AddComponent(type);
-
-                        _compiledComponent.hideFlags = HideFlags.HideInInspector | HideFlags.DontSaveInEditor;
-
-                        if (compiledReferences != null && compiledReferenceNames != null)
-                        {
-                            if (compiledReferences.Count != compiledReferenceNames.Count)
-                            {
-                                Debug.LogError($"Mismatched compiled reference names and objects on {gameObject.name}. Try and recompile the script.", this);
-                                return;
-                            }
-
-                            for (int i = 0; i < compiledReferenceNames.Count; i++)
-                            {
-                                var field = compiledType.GetField(compiledReferenceNames[i]);
-                                if (field != null) field.SetValue(_compiledComponent, compiledReferences[i]);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    Debug.LogError($"Compiled type '{_compiledTypeName}' could not be found on {gameObject.name}.", this);
-                }
-                return;
-            }
-
             nest.afterGraphChange += CacheReference;
             nest.beforeGraphChange += ClearCachedReference;
             CacheReference();
@@ -170,7 +104,6 @@ namespace Unity.VisualScripting
         protected virtual void OnEnable()
         {
             _enabled = true;
-            if (_compiledComponent != null) _compiledComponent.enabled = true;
         }
 
         protected virtual void OnInstantiateWhileEnabled()
@@ -184,23 +117,10 @@ namespace Unity.VisualScripting
         protected virtual void OnDisable()
         {
             _enabled = false;
-            if (_compiledComponent != null) _compiledComponent.enabled = false;
         }
 
         protected virtual void OnDestroy()
         {
-            if (UseCompiledGraph)
-            {
-                if (_compiledComponent != null)
-                {
-                    Destroy(_compiledComponent);
-                    _compiledComponent = null;
-                }
-                _alive = false;
-                threadSafeGameObject = null;
-                return;
-            }
-
             ClearCachedReference();
             if (graph != null)
             {

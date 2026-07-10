@@ -55,6 +55,7 @@ namespace Unity.VisualScripting
             this.targetType = targetType;
             name = fieldInfo.Name;
             parameterTypes = null;
+            ComputeRequiresTarget();
             isReflected = true;
         }
 
@@ -68,6 +69,7 @@ namespace Unity.VisualScripting
             this.targetType = targetType;
             name = propertyInfo.Name;
             parameterTypes = null;
+            ComputeRequiresTarget();
             isReflected = true;
         }
 
@@ -83,6 +85,7 @@ namespace Unity.VisualScripting
             isExtension = methodInfo.IsExtension();
             isInvokedAsExtension = methodInfo.IsInvokedAsExtension(targetType);
             parameterTypes = methodInfo.GetInvocationParameters(_isInvokedAsExtension).Select(pi => pi.ParameterType).ToArray();
+            ComputeRequiresTarget();
             isReflected = true;
         }
 
@@ -96,6 +99,7 @@ namespace Unity.VisualScripting
             this.targetType = targetType;
             name = constructorInfo.Name;
             parameterTypes = constructorInfo.GetParameters().Select(pi => pi.ParameterType).ToArray();
+            ComputeRequiresTarget();
             isReflected = true;
         }
 
@@ -452,25 +456,21 @@ namespace Unity.VisualScripting
         public bool isConstructor => source == Source.Constructor;
 
         [DoNotSerialize]
-        private sbyte _requiresTargetCache = -1;
+        private bool _requiresTarget;
 
         public bool requiresTarget
         {
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+
             get
             {
-                if (_requiresTargetCache != -1)
-                {
-                    return _requiresTargetCache == 1;
-                }
-
-                return ComputeRequiresTarget();
+                EnsureReflected();
+                return _requiresTarget;
             }
         }
 
         private bool ComputeRequiresTarget()
         {
-            bool result = source switch
+            return source switch
             {
                 Source.Field => !fieldInfo.IsStatic,
                 Source.Constructor => false,
@@ -478,9 +478,6 @@ namespace Unity.VisualScripting
                 Source.Property => CheckPropertyStatic(propertyInfo),
                 _ => throw new UnexpectedEnumValueException<Source>(source)
             };
-
-            _requiresTargetCache = result ? (sbyte)1 : (sbyte)0;
-            return result;
         }
 
         private static bool CheckPropertyStatic(PropertyInfo pi)
@@ -730,6 +727,8 @@ namespace Unity.VisualScripting
             isReflected = true;
 
             hasValidated = false;
+
+            _requiresTarget = ComputeRequiresTarget();
         }
 
         private void ReflectField(IEnumerable<MemberInfo> candidates)
@@ -813,7 +812,6 @@ namespace Unity.VisualScripting
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnsureReflected()
         {
             if (!isReflected)
@@ -822,43 +820,32 @@ namespace Unity.VisualScripting
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnsureReady(object target)
         {
             EnsureReflected();
-
-            var requiresTarget = this.requiresTarget;
-
-            if (target == null && requiresTarget)
+            if ((target == null) == this.requiresTarget)
             {
-                throw new InvalidOperationException($"Missing target object for '{targetType}.{name}'.");
-            }
-            else if (target != null && !requiresTarget)
-            {
-                throw new InvalidOperationException($"Superfluous target object for '{targetType}.{name}'.");
+                ThrowReadyError(target == null);
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnsureReady(ParameterValue target)
         {
             EnsureReflected();
-
-            var requiresTarget = this.requiresTarget;
-
-            var isNull = target.IsNull();
-
-            if (isNull && requiresTarget)
+            if (target.IsNull() == this.requiresTarget)
             {
-                throw new InvalidOperationException($"Missing target object for '{targetType}.{name}'.");
-            }
-            else if (!isNull && !requiresTarget)
-            {
-                throw new InvalidOperationException($"Superfluous target object for '{targetType}.{name}'.");
+                ThrowReadyError(target.IsNull());
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ThrowReadyError(bool isNull)
+        {
+            if (isNull)
+                throw new InvalidOperationException($"Missing target object for '{targetType}.{name}'.");
+            else
+                throw new InvalidOperationException($"Superfluous target object for '{targetType}.{name}'.");
+        }
+
         public object Get(object target)
         {
             EnsureReady(target);
@@ -876,28 +863,24 @@ namespace Unity.VisualScripting
             return ThrowAccessorErrors();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue Get(ParameterValue target)
         {
             EnsureReady(target);
 
             if (source == Source.Field)
             {
-                var accessor = fieldAccessor ?? fieldInfo.Prewarm();
-                return accessor.GetValue(target);
+                return (fieldAccessor ??= fieldInfo.Prewarm()).GetValue(target);
             }
 
             if (source == Source.Property)
             {
-                var accessor = propertyAccessor ?? propertyInfo.Prewarm();
-                return accessor.GetValue(target);
+                return (propertyAccessor ??= propertyInfo.Prewarm()).GetValue(target);
             }
 
             return ThrowAccessorErrors();
         }
 
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private ParameterValue ThrowAccessorErrors()
         {
             if (source == Source.Method || source == Source.Constructor)
@@ -905,45 +888,38 @@ namespace Unity.VisualScripting
             throw new UnexpectedEnumValueException<Source>(source);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue GetRef(ref ParameterValue target)
         {
             EnsureReady(target);
 
             if (source == Source.Field)
             {
-                var accessor = fieldAccessor ?? fieldInfo.Prewarm();
-                return accessor.GetValueRef(ref target);
+                return (fieldAccessor ??= fieldInfo.Prewarm()).GetValueRef(ref target);
             }
 
             if (source == Source.Property)
             {
-                var accessor = propertyAccessor ?? propertyInfo.Prewarm();
-                return accessor.GetValueRef(ref target);
+                return (propertyAccessor ??= propertyInfo.Prewarm()).GetValueRef(ref target);
             }
 
             return ThrowAccessorErrors();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Get<T>(object target)
         {
             return (T)Get(target);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Get<T>(ParameterValue target)
         {
             return Get(target).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T GetRef<T>(ref ParameterValue target)
         {
             return GetRef(ref target).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public object Set(object target, object value)
         {
             EnsureReady(target);
@@ -955,22 +931,19 @@ namespace Unity.VisualScripting
 
             if (source == Source.Field)
             {
-                var accessor = fieldAccessor ?? fieldInfo.Prewarm();
-                accessor.SetValue(target, value);
+                (fieldAccessor ??= fieldInfo.Prewarm()).SetValue(target, value);
                 return value;
             }
 
             if (source == Source.Property)
             {
-                var accessor = propertyAccessor ?? propertyInfo.Prewarm();
-                accessor.SetValue(target, value);
+                (propertyAccessor ??= propertyInfo.Prewarm()).SetValue(target, value);
                 return value;
             }
 
             return ThrowAccessorErrors();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue Set(ParameterValue target, ParameterValue value)
         {
             EnsureReady(target);
@@ -982,22 +955,19 @@ namespace Unity.VisualScripting
 
             if (source == Source.Field)
             {
-                var accessor = fieldAccessor ?? fieldInfo.Prewarm();
-                accessor.SetValue(target, value);
+                (fieldAccessor ??= fieldInfo.Prewarm()).SetValue(target, value);
                 return value;
             }
 
             if (source == Source.Property)
             {
-                var accessor = propertyAccessor ?? propertyInfo.Prewarm();
-                accessor.SetValue(target, value);
+                (propertyAccessor ??= propertyInfo.Prewarm()).SetValue(target, value);
                 return value;
             }
 
             return ThrowAccessorErrors();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue SetRef(ref ParameterValue target, ParameterValue value)
         {
             EnsureReady(target);
@@ -1009,22 +979,19 @@ namespace Unity.VisualScripting
 
             if (source == Source.Field)
             {
-                var accessor = fieldAccessor ?? fieldInfo.Prewarm();
-                accessor.SetValueRef(ref target, value);
+                (fieldAccessor ??= fieldInfo.Prewarm()).SetValueRef(ref target, value);
                 return value;
             }
 
             if (source == Source.Property)
             {
-                var accessor = propertyAccessor ?? propertyInfo.Prewarm();
-                accessor.SetValueRef(ref target, value);
+                (propertyAccessor ??= propertyInfo.Prewarm()).SetValueRef(ref target, value);
                 return value;
             }
 
             return ThrowAccessorErrors();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void EnsureInvocable(object target)
         {
             EnsureReady(target);
@@ -1034,7 +1001,6 @@ namespace Unity.VisualScripting
             ValidateInvocable();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void EnsureInvocable(ParameterValue target)
         {
             EnsureReady(target);
@@ -1044,7 +1010,6 @@ namespace Unity.VisualScripting
             ValidateInvocable();
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private void ValidateInvocable()
         {
             if (source == Source.Field || source == Source.Property)
@@ -1240,7 +1205,6 @@ namespace Unity.VisualScripting
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue Invoke(ParameterValue target, Span<ParameterValue> arguments)
         {
             EnsureInvocable(target);
@@ -1261,7 +1225,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arguments);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue InvokeRef(ref ParameterValue target, Span<ParameterValue> arguments)
         {
             EnsureInvocable(target);
@@ -1282,7 +1245,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arguments);
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private ParameterValue InvokeConstructor(Span<ParameterValue> arguments)
         {
             if (source != Source.Constructor)
@@ -1293,7 +1255,6 @@ namespace Unity.VisualScripting
             return constructorInvoker.Invoke(ParameterValue.None, arguments);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue Invoke(ParameterValue target)
         {
             EnsureInvocable(target);
@@ -1308,7 +1269,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue InvokeRef(ref ParameterValue target)
         {
             EnsureInvocable(target);
@@ -1323,7 +1283,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor();
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private ParameterValue InvokeConstructor()
         {
             if (source == Source.Constructor)
@@ -1334,7 +1293,6 @@ namespace Unity.VisualScripting
             throw new UnexpectedEnumValueException<Source>(source);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue Invoke(ParameterValue target, ParameterValue arg0)
         {
             EnsureInvocable(target);
@@ -1349,7 +1307,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arg0);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue InvokeRef(ref ParameterValue target, ParameterValue arg0)
         {
             EnsureInvocable(target);
@@ -1364,7 +1321,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arg0);
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private ParameterValue InvokeConstructor(ParameterValue arg0)
         {
             if (source == Source.Constructor)
@@ -1374,7 +1330,6 @@ namespace Unity.VisualScripting
             throw new UnexpectedEnumValueException<Source>(source);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1)
         {
             EnsureInvocable(target);
@@ -1389,7 +1344,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arg0, arg1);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue InvokeRef(ref ParameterValue target, ParameterValue arg0, ParameterValue arg1)
         {
             EnsureInvocable(target);
@@ -1404,7 +1358,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arg0, arg1);
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private ParameterValue InvokeConstructor(ParameterValue arg0, ParameterValue arg1)
         {
             if (source == Source.Constructor)
@@ -1415,7 +1368,6 @@ namespace Unity.VisualScripting
             throw new UnexpectedEnumValueException<Source>(source);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
         {
             EnsureInvocable(target);
@@ -1430,7 +1382,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arg0, arg1, arg2);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue InvokeRef(ref ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
         {
             EnsureInvocable(target);
@@ -1445,7 +1396,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arg0, arg1, arg2);
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private ParameterValue InvokeConstructor(ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
         {
             if (source == Source.Constructor)
@@ -1456,7 +1406,6 @@ namespace Unity.VisualScripting
             throw new UnexpectedEnumValueException<Source>(source);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
         {
             EnsureInvocable(target);
@@ -1471,7 +1420,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arg0, arg1, arg2, arg3);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue InvokeRef(ref ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
         {
             EnsureInvocable(target);
@@ -1486,7 +1434,6 @@ namespace Unity.VisualScripting
             return InvokeConstructor(arg0, arg1, arg2, arg3);
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private ParameterValue InvokeConstructor(ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
         {
             if (source == Source.Constructor)
@@ -1497,7 +1444,6 @@ namespace Unity.VisualScripting
             throw new UnexpectedEnumValueException<Source>(source);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
         {
             EnsureInvocable(target);
@@ -1510,7 +1456,6 @@ namespace Unity.VisualScripting
             return InvokeSlow(target, arg0, arg1, arg2, arg3, arg4);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ParameterValue InvokeRef(ref ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
         {
             EnsureInvocable(target);
@@ -1523,7 +1468,6 @@ namespace Unity.VisualScripting
             return InvokeSlow(target, arg0, arg1, arg2, arg3, arg4);
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
         private ParameterValue InvokeSlow(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
         {
             if (source == Source.Method)
@@ -1546,127 +1490,106 @@ namespace Unity.VisualScripting
             throw new UnexpectedEnumValueException<Source>(source);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(object target)
         {
             return (T)Invoke(target);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(object target, object arg0)
         {
             return (T)Invoke(target, arg0);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(object target, object arg0, object arg1)
         {
             return (T)Invoke(target, arg0, arg1);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(object target, object arg0, object arg1, object arg2)
         {
             return (T)Invoke(target, arg0, arg1, arg2);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(object target, object arg0, object arg1, object arg2, object arg3)
         {
             return (T)Invoke(target, arg0, arg1, arg2, arg3);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(object target, object arg0, object arg1, object arg2, object arg3, object arg4)
         {
             return (T)Invoke(target, arg0, arg1, arg2, arg3, arg4);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(object target, params object[] arguments)
         {
             return (T)Invoke(target, arguments);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(ParameterValue target, Span<ParameterValue> arguments)
         {
             return Invoke(target, arguments).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T InvokeRef<T>(ref ParameterValue target, Span<ParameterValue> arguments)
         {
             return InvokeRef(ref target, arguments).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(ParameterValue target)
         {
             return Invoke(target).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(ParameterValue target, ParameterValue arg0)
         {
             return Invoke(target, arg0).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(ParameterValue target, ParameterValue arg0, ParameterValue arg1)
         {
             return Invoke(target, arg0, arg1).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
         {
             return Invoke(target, arg0, arg1, arg2).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
         {
             return Invoke(target, arg0, arg1, arg2, arg3).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Invoke<T>(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
         {
             return InvokeSlow(target, arg0, arg1, arg2, arg3, arg4).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T InvokeRef<T>(ref ParameterValue target)
         {
             return InvokeRef(ref target).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T InvokeRef<T>(ref ParameterValue target, ParameterValue arg0)
         {
             return InvokeRef(ref target, arg0).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T InvokeRef<T>(ref ParameterValue target, ParameterValue arg0, ParameterValue arg1)
         {
             return InvokeRef(ref target, arg0, arg1).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T InvokeRef<T>(ref ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
         {
             return InvokeRef(ref target, arg0, arg1, arg2).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T InvokeRef<T>(ref ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
         {
             return InvokeRef(ref target, arg0, arg1, arg2, arg3).Cast<T>();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T InvokeRef<T>(ref ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
         {
             return InvokeRef(ref target, arg0, arg1, arg2, arg3, arg4).Cast<T>();

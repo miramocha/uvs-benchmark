@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Unity.VisualScripting
 {
@@ -12,6 +13,8 @@ namespace Unity.VisualScripting
             Ensure.That(nameof(action)).IsNotNull(action);
 
             this.action = action;
+            requiresCoroutine = false;
+            supportsCoroutine = false;
         }
 
         public ControlInput(string key, Func<Flow, IEnumerator> coroutineAction) : base(key)
@@ -19,6 +22,9 @@ namespace Unity.VisualScripting
             Ensure.That(nameof(coroutineAction)).IsNotNull(coroutineAction);
 
             this.coroutineAction = coroutineAction;
+
+            requiresCoroutine = true;
+            supportsCoroutine = true;
         }
 
         public ControlInput(string key, Func<Flow, ControlOutput> action, Func<Flow, IEnumerator> coroutineAction) : base(key)
@@ -28,11 +34,14 @@ namespace Unity.VisualScripting
 
             this.action = action;
             this.coroutineAction = coroutineAction;
+
+            requiresCoroutine = false;
+            supportsCoroutine = true;
         }
 
-        public bool supportsCoroutine => coroutineAction != null;
+        public readonly bool supportsCoroutine;
 
-        public bool requiresCoroutine => action == null;
+        public readonly bool requiresCoroutine;
 
         internal readonly Func<Flow, ControlOutput> action;
 

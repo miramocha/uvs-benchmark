@@ -284,7 +284,7 @@ namespace Unity.VisualScripting.FullSerializer
             }
 
             throw new InvalidCastException("Unable to cast <" + this + "> (with type = " +
-                _value.GetType() + ") to type " + typeof(T));
+                (_value?.GetType().Name ?? "null") + ") to type " + typeof(T));
         }
 
         #endregion Casts

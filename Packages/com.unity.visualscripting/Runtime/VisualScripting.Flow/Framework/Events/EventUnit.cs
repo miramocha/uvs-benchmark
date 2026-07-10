@@ -16,7 +16,7 @@ namespace Unity.VisualScripting
 
             public bool isListening;
 
-            public HashSet<Flow> activeCoroutines = new HashSet<Flow>();
+            public HashSet<Flow> activeCoroutines;
         }
 
         public virtual IGraphElementData CreateData()
@@ -38,14 +38,6 @@ namespace Unity.VisualScripting
 
         [DoNotSerialize]
         protected abstract bool register { get; }
-        
-        /// <summary>
-        /// Force debug flow to show values, only use if a flow runs once like a OnStart Unit because a debug flow is alot slower.
-        /// This is required because alot of the time if you don't have the graph open the flow will run in a non-debug mode,
-        /// causing the values for this flow to not display on the value connections even after the graph is opened. This is a workaround for that issue.
-        /// This is ignored in a build, where debug flow is always disabled.
-        /// </summary>
-        protected virtual bool UseDebugFlow => false;
 
         protected override void Definition()
         {
@@ -68,9 +60,15 @@ namespace Unity.VisualScripting
                 return;
             }
 
+            if (coroutine)
+            {
+                data.activeCoroutines = new HashSet<Flow>();
+            }
+
             if (register)
             {
                 var reference = stack.ToReference();
+
                 var hook = GetHook(reference);
                 Action<TArgs> handler = args => Trigger(reference, args);
                 EventBus.Register(hook, handler);
@@ -93,9 +91,12 @@ namespace Unity.VisualScripting
 
             // The coroutine's flow will dispose at the next frame, letting us
             // keep the current flow for clean up operations if needed
-            foreach (var activeCoroutine in data.activeCoroutines)
+            if (data.activeCoroutines != null)
             {
-                activeCoroutine.StopCoroutine(false);
+                foreach (var activeCoroutine in data.activeCoroutines)
+                {
+                    activeCoroutine.StopCoroutine(false);
+                }
             }
 
             if (register)
@@ -118,6 +119,13 @@ namespace Unity.VisualScripting
             // executing MoveNext() until our soft-destroy call at the end of Flow.Coroutine
             // or even dispose the coroutine's enumerator (!).
             var data = instance.GetElementData<Data>(this);
+
+            if (data.activeCoroutines == null)
+            {
+                base.Uninstantiate(instance);
+                return;
+            }
+
             var coroutines = data.activeCoroutines.ToHashSetPooled();
 
 #if UNITY_EDITOR
@@ -159,8 +167,6 @@ namespace Unity.VisualScripting
         {
             var flow = Flow.New(reference);
 
-            flow.useDebugFlow = UseDebugFlow;
-
             if (!ShouldTrigger(flow, args))
             {
                 flow.Dispose();
@@ -183,6 +189,7 @@ namespace Unity.VisualScripting
 
         private void Run(Flow flow)
         {
+#if UNITY_EDITOR
             if (flow.enableDebug)
             {
                 var editorData = flow.stack.GetElementDebugData<IUnitDebugData>(this);
@@ -190,7 +197,7 @@ namespace Unity.VisualScripting
                 editorData.lastInvokeFrame = EditorTimeBinding.frame;
                 editorData.lastInvokeTime = EditorTimeBinding.time;
             }
-
+#endif
             if (coroutine)
             {
                 flow.StartCoroutine(trigger, flow.stack.GetElementData<Data>(this).activeCoroutines);
@@ -208,7 +215,7 @@ namespace Unity.VisualScripting
 
             if (portValue == null) return false;
 
-            return calledName.AsSpan().Trim().Equals(portValue.AsSpan().Trim(), StringComparison.OrdinalIgnoreCase);
+            return calledName.Trim().Equals(portValue.Trim(), StringComparison.OrdinalIgnoreCase);
         }
     }
 }

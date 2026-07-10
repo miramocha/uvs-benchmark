@@ -243,7 +243,7 @@ namespace Unity.VisualScripting
             return pointer;
         }
 
-        public GraphReference ChildReference(IGraphParentElement parentElement, bool ensureValid, int? maxRecursionDepth = null)
+        public GraphReference ChildReference(IGraphParentElement parentElement, bool ensureValid, int maxRecursionDepth = -1)
         {
             var pointer = Clone();
 
@@ -294,10 +294,20 @@ namespace Unity.VisualScripting
 
         public IEnumerable<GraphReference> GetBreadcrumbs()
         {
-            for (int depth = 0; depth < this.depth; depth++)
+            int currentDepth = this.depth;
+            var tempElements = ListPool<IGraphParentElement>.New();
+
+            for (int d = 0; d < currentDepth; d++)
             {
-                yield return New(root, parentElementStack.Take(depth), true);
+
+                var parentElement = frames[d].ParentElement;
+                if (parentElement != null)
+                    tempElements.Add(parentElement);
+
+                yield return New(root, tempElements, true);
             }
+
+            ListPool<IGraphParentElement>.Free(tempElements);
         }
 
         #endregion

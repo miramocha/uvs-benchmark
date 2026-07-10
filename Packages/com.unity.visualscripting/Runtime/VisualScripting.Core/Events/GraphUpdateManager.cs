@@ -6,7 +6,7 @@ namespace Unity.VisualScripting
     [AddComponentMenu("")]
     internal sealed class GraphUpdateManager : MonoBehaviour
     {
-        private readonly List<IEventMachine> _updateableMachines = new List<IEventMachine>(4);
+        private readonly List<IEventMachine> _updateableMachines = new List<IEventMachine>(2);
 
         public void Register(IEventMachine machine)
         {

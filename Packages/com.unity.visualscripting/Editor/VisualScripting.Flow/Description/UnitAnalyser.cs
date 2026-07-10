@@ -315,7 +315,7 @@ namespace Unity.VisualScripting
             }
             // The value isn't connected and has no default value,
             // therefore it is certain to be missing at runtime.
-            else
+            else if (!valueInput.allowsNull)
             {
                 yield return Warning.Severe($"{PortLabel(valueInput)} is missing.");
             }

@@ -35,5 +35,17 @@ namespace Unity.VisualScripting
                 @object = ValueInput<GameObject>(nameof(@object), null).NullMeansSelf();
             }
         }
+
+        protected override string GetUnitName()
+        {
+            if (name != null)
+            {
+                if (!name.hasValidConnection)
+                    return $"{base.GetUnitName()} ({defaultValues[name.key]})";
+                else
+                    return $"{base.GetUnitName()} (Connected Name)";
+            }
+            return base.GetUnitName();
+        }
     }
 }

@@ -298,7 +298,7 @@ namespace Unity.VisualScripting
         }
 
         /// <summary>
-        /// If using a object value you should manually free the index using <see cref="ParameterValue.FreeObject(int)"/>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
         /// once done with the value.
         /// </summary>
         public static ParameterValue InvokeOptimized(this MethodInfo methodInfo, ParameterValue target)
@@ -312,7 +312,7 @@ namespace Unity.VisualScripting
         }
 
         /// <summary>
-        /// If using a object value you should manually free the index using <see cref="ParameterValue.FreeObject(int)"/>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
         /// once done with the value.
         /// </summary>
         public static ParameterValue InvokeOptimized(this MethodInfo methodInfo, ParameterValue target, ParameterValue arg0)
@@ -326,7 +326,7 @@ namespace Unity.VisualScripting
         }
 
         /// <summary>
-        /// If using a object value you should manually free the index using <see cref="ParameterValue.FreeObject(int)"/>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
         /// </summary>
         public static ParameterValue InvokeOptimized(this MethodInfo methodInfo, ParameterValue target, ParameterValue arg0, ParameterValue arg1)
         {
@@ -339,7 +339,7 @@ namespace Unity.VisualScripting
         }
 
         /// <summary>
-        /// If using a object value you should manually free the index using <see cref="ParameterValue.FreeObject(int)"/>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
         /// once done with the value.
         /// </summary>
         public static ParameterValue InvokeOptimized(this MethodInfo methodInfo, ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
@@ -353,7 +353,7 @@ namespace Unity.VisualScripting
         }
 
         /// <summary>
-        /// If using a object value you should manually free the index using <see cref="ParameterValue.FreeObject(int)"/>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
         /// once done with the value.
         /// </summary>
         public static ParameterValue InvokeOptimized(this MethodInfo methodInfo, ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
@@ -367,7 +367,7 @@ namespace Unity.VisualScripting
         }
 
         /// <summary>
-        /// If using a object value you should manually free the index using <see cref="ParameterValue.FreeObject(int)"/>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
         /// once done with the value.
         /// </summary>
         public static ParameterValue InvokeOptimized(this MethodInfo methodInfo, ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.Profiling;
 
 namespace Unity.VisualScripting
 {
@@ -6,6 +7,8 @@ namespace Unity.VisualScripting
     {
         IUnit unit { get; set; }
         string key { get; }
+
+        public ProfilerMarker ProfilerMarker { get; }
 
         IEnumerable<IUnitRelation> relations { get; }
 

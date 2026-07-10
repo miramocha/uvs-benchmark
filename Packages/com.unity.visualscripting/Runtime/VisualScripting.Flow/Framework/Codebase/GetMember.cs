@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace Unity.VisualScripting
 {
     /// <summary>
@@ -30,9 +28,9 @@ namespace Unity.VisualScripting
         public ValueOutput value { get; private set; }
 
         [Inspectable]
-        [InspectorLabel("Cache Result", "After the first execution cache the result instead of calling the member again")]
+        [InspectorLabel("Cache result", "After the first execution cache the result instead of calling the member again")]
         [Serialize]
-        public bool CacheResult { get; private set; }
+        public bool CacheResult { get; set; }
 
         [DoNotSerialize]
         private System.Func<Flow, ParameterValue> cachedGet;

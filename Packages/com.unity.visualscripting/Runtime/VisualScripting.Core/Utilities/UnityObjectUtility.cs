@@ -21,7 +21,7 @@ namespace Unity.VisualScripting
             // Checks whether an object is null or Unity pseudo-null
             // without having to cast to UnityEngine.Object manually
 
-            return obj == null || ((obj is UnityObject) && ((UnityObject)obj) == null);
+            return obj == null || ((obj is UnityObject @object) && @object == null);
         }
 
         public static string ToSafeString(this UnityObject uo)

@@ -294,8 +294,9 @@ namespace Unity.VisualScripting.FullSerializer
         /// <summary>
         /// Fetches a converter that can serialize/deserialize the given type.
         /// </summary>
-        private fsBaseConverter GetConverter(Type type, Type overrideConverterType)
+        private fsBaseConverter GetConverter(Type type, Type overrideConverterType, out fsResult result)
         {
+            result = fsResult.Success;
             // Use an override converter type instead if that's what the user has
             // requested.
             if (overrideConverterType != null)
@@ -365,7 +366,8 @@ namespace Unity.VisualScripting.FullSerializer
                 }
             }
 
-            throw new InvalidOperationException("Internal error -- could not find a converter for " + type);
+            result = fsResult.Fail("Internal error -- could not find a converter for " + type);
+            return null;
         }
 
         /// <summary>
@@ -476,7 +478,13 @@ namespace Unity.VisualScripting.FullSerializer
                 _references.Enter();
 
                 // This type does not need cycle support.
-                var converter = GetConverter(instance.GetType(), overrideConverterType);
+                var converter = GetConverter(instance.GetType(), overrideConverterType, out var converterResult);
+                if (converterResult.Failed)
+                {
+                    data = new fsData();
+                    return converterResult;
+                }
+
                 if (converter.RequestCycleSupport(instance.GetType()) == false)
                 {
                     return InternalSerialize_2_Inheritance(storageType, overrideConverterType, instance, out data);
@@ -506,14 +514,14 @@ namespace Unity.VisualScripting.FullSerializer
                 // actual object. InternalSerialize will handle inheritance
                 // correctly for us.
                 var result = InternalSerialize_2_Inheritance(storageType, overrideConverterType, instance, out data);
-                if (result.Failed)
+                if (converterResult.Failed)
                 {
-                    return result;
+                    return converterResult;
                 }
 
                 _lazyReferenceWriter.WriteDefinition(_references.GetReferenceId(instance), data);
 
-                return result;
+                return converterResult;
             }
             finally
             {
@@ -534,58 +542,67 @@ namespace Unity.VisualScripting.FullSerializer
                 return serializeResult;
             }
 
-            // Do we need to add type information? If the field type and the
-            // instance type are different then we will not be able to recover
-            // the correct instance type from the field type when we deserialize
-            // the object.
-            //
-            // Note: We allow converters to request that we do *not* add type
-            //       information.
-            if (storageType != instance.GetType() &&
-                GetConverter(storageType, overrideConverterType).RequestInheritanceSupport(storageType))
+            try
             {
-                var instanceType = instance.GetType();
+                // Do we need to add type information? If the field type and the
+                // instance type are different then we will not be able to recover
+                // the correct instance type from the field type when we deserialize
+                // the object.
+                //
+                // Note: We allow converters to request that we do *not* add type
+                //       information.
 
-                // LAZLO / LUDIQ
-                // We need to loosen the instance type hint of Unity objects when serializing
-                // to counter a very specific issue that happens when:
-                //  - We serialize a reference to an object of an editor type
-                //  - That object type inherits a runtime type
-                //  - The field supports the runtime type, but will allow the editor type
-                //  - Therefore serializing as the editor type is valid, but will fail to deserialize in builds
-                // The only current example of this bug is AudioMixers and AudioMixerGroups.
-                // UnityEDITOR.Audio.AudioMixerController extends UnityENGINE.Audio.AudioMixer.
-                // UnityEDITOR.Audio.AudioMixerGroupController extends UnityENGINE.Audio.AudioMixerGroup.
-                // Therefore, if we serialize a type hint to the editor controller, e.g. AudioMixerGroupController,
-                // builds will fail to deserialize the type hint, even though they don't actually need it
-                // to properly fetch the Unity Object reference, because it's provided directly by the converter.
-                // We must instead serialize a type hint to the runtime, non-controller type, e.g. AudioMixer.
-                // However, when loosening our type, we must make sure not to go past the compatibility
-                // with the defined storage type, because if we did, we would get the "Ignoring type specifier"
-                // error defined below, as the instance type hint wouldn't be assignable to the storage type on deserialization.
-                // Likewise, we must make sure not to go above UnityObject itself, because we need that much hinting
-                // for FullSerializer to know that the proper converter to be used is our custom UnityObjectConverter.
-                // See: https://support.ludiq.io/communities/5/topics/1032-audio-mixer-reference-gets-nulled-on-il2cpp-builds
-                if (instance is UnityObject)
+                if (storageType != instance.GetType() &&
+                    GetConverter(storageType, overrideConverterType, out fsResult result)?.RequestInheritanceSupport(storageType) == true &&
+                    result.Succeeded)
                 {
-                    var looseType = instanceType;
+                    var instanceType = instance.GetType();
 
-                    do
+                    // LAZLO / LUDIQ
+                    // We need to loosen the instance type hint of Unity objects when serializing
+                    // to counter a very specific issue that happens when:
+                    //  - We serialize a reference to an object of an editor type
+                    //  - That object type inherits a runtime type
+                    //  - The field supports the runtime type, but will allow the editor type
+                    //  - Therefore serializing as the editor type is valid, but will fail to deserialize in builds
+                    // The only current example of this bug is AudioMixers and AudioMixerGroups.
+                    // UnityEDITOR.Audio.AudioMixerController extends UnityENGINE.Audio.AudioMixer.
+                    // UnityEDITOR.Audio.AudioMixerGroupController extends UnityENGINE.Audio.AudioMixerGroup.
+                    // Therefore, if we serialize a type hint to the editor controller, e.g. AudioMixerGroupController,
+                    // builds will fail to deserialize the type hint, even though they don't actually need it
+                    // to properly fetch the Unity Object reference, because it's provided directly by the converter.
+                    // We must instead serialize a type hint to the runtime, non-controller type, e.g. AudioMixer.
+                    // However, when loosening our type, we must make sure not to go past the compatibility
+                    // with the defined storage type, because if we did, we would get the "Ignoring type specifier"
+                    // error defined below, as the instance type hint wouldn't be assignable to the storage type on deserialization.
+                    // Likewise, we must make sure not to go above UnityObject itself, because we need that much hinting
+                    // for FullSerializer to know that the proper converter to be used is our custom UnityObjectConverter.
+                    // See: https://support.ludiq.io/communities/5/topics/1032-audio-mixer-reference-gets-nulled-on-il2cpp-builds
+                    if (instance is UnityObject)
                     {
-                        instanceType = looseType;
-                        looseType = looseType.BaseType;
-                    }
-                    while (looseType != null && instanceType != typeof(UnityObject) && storageType.IsAssignableFrom(looseType));
+                        var looseType = instanceType;
 
-                    // Debug.Log($"Loosened instance type hint for {instance.GetType()} stored as {storageType} to {instanceType}");
+                        do
+                        {
+                            instanceType = looseType;
+                            looseType = looseType.BaseType;
+                        }
+                        while (looseType != null && instanceType != typeof(UnityObject) && storageType.IsAssignableFrom(looseType));
+
+                        // Debug.Log($"Loosened instance type hint for {instance.GetType()} stored as {storageType} to {instanceType}");
+                    }
+
+                    // Add the inheritance metadata
+                    EnsureDictionary(data);
+                    data.AsDictionary[Key_InstanceType] = new fsData(RuntimeCodebase.SerializeType(instanceType));
                 }
 
-                // Add the inheritance metadata
-                EnsureDictionary(data);
-                data.AsDictionary[Key_InstanceType] = new fsData(RuntimeCodebase.SerializeType(instanceType));
+                return serializeResult;
             }
-
-            return serializeResult;
+            catch (Exception ex)
+            {
+                return fsResult.Fail($"FullSerializer Internal Error -- Error trying to serialize: {instance.GetType()?.CSharpFullName() ?? "null"}\n{ex}");
+            }
         }
 
         private fsResult InternalSerialize_3_ProcessVersioning(Type overrideConverterType, object instance, out fsData data)
@@ -596,37 +613,54 @@ namespace Unity.VisualScripting.FullSerializer
             // *always* be equal to instance.GetType(), so why bother taking the
             //  parameter?
 
-            // Check to see if there is versioning information for this type. If
-            // so, then we need to serialize it.
-            var optionalVersionedType = fsVersionManager.GetVersionedType(instance.GetType());
-            if (optionalVersionedType.HasValue)
+            try
             {
-                var versionedType = optionalVersionedType.Value;
-
-                // Serialize the actual object content; we'll just wrap it with
-                // versioning metadata here.
-                var result = InternalSerialize_4_Converter(overrideConverterType, instance, out data);
-                if (result.Failed)
+                // Check to see if there is versioning information for this type. If
+                // so, then we need to serialize it.
+                var optionalVersionedType = fsVersionManager.GetVersionedType(instance.GetType());
+                if (optionalVersionedType.HasValue)
                 {
+                    var versionedType = optionalVersionedType.Value;
+
+                    // Serialize the actual object content; we'll just wrap it with
+                    // versioning metadata here.
+                    var result = InternalSerialize_4_Converter(overrideConverterType, instance, out data);
+                    if (result.Failed)
+                    {
+                        return result;
+                    }
+
+                    // Add the versioning information
+                    EnsureDictionary(data);
+                    data.AsDictionary[Key_Version] = new fsData(versionedType.VersionString);
+
                     return result;
                 }
 
-                // Add the versioning information
-                EnsureDictionary(data);
-                data.AsDictionary[Key_Version] = new fsData(versionedType.VersionString);
-
-                return result;
+                // This type has no versioning information -- directly serialize it
+                // using the selected converter.
+                return InternalSerialize_4_Converter(overrideConverterType, instance, out data);
             }
-
-            // This type has no versioning information -- directly serialize it
-            // using the selected converter.
-            return InternalSerialize_4_Converter(overrideConverterType, instance, out data);
+            catch (Exception ex)
+            {
+                data = new fsData();
+                return fsResult.Fail($"FullSerializer Internal Error -- Error trying to serialize: {instance.GetType()?.CSharpFullName() ?? "null"}\n{ex}");
+            }
         }
 
         private fsResult InternalSerialize_4_Converter(Type overrideConverterType, object instance, out fsData data)
         {
             var instanceType = instance.GetType();
-            return GetConverter(instanceType, overrideConverterType).TrySerialize(instance, out data, instanceType);
+
+            var converter = GetConverter(instanceType, overrideConverterType, out var result);
+
+            if (result.Failed)
+            {
+                data = new fsData();
+                return result;
+            }
+
+            return converter.TrySerialize(instance, out data, instanceType);
         }
 
         /// <summary>
@@ -644,15 +678,24 @@ namespace Unity.VisualScripting.FullSerializer
         {
             if (data.IsNull)
             {
-                result = null;
-                var processors = GetProcessors(storageType);
-                Invoke_OnBeforeDeserialize(processors, storageType, ref data);
-                Invoke_OnAfterDeserialize(processors, storageType, null);
-                return fsResult.Success;
+                try
+                {
+                    result = null;
+                    var processors = GetProcessors(storageType);
+                    Invoke_OnBeforeDeserialize(processors, storageType, ref data);
+                    Invoke_OnAfterDeserialize(processors, storageType, null);
+                    return fsResult.Success;
+                }
+                catch (Exception ex)
+                {
+                    return fsResult.Fail($"FullSerializer Internal Error -- Error trying to deserialize: {storageType.CSharpFullName()}\n" + ex);
+                }
             }
 
             // Convert legacy data into modern style data
             ConvertLegacyData(ref data);
+
+            fsResult r = new fsResult();
 
             try
             {
@@ -663,7 +706,7 @@ namespace Unity.VisualScripting.FullSerializer
                 _references.Enter();
 
                 List<fsObjectProcessor> processors;
-                var r = InternalDeserialize_1_CycleReference(overrideConverterType, data, storageType, ref result, out processors);
+                r = InternalDeserialize_1_CycleReference(overrideConverterType, data, storageType, ref result, out processors);
                 if (r.Succeeded)
                 {
                     // LAZLO / LUDIQ FIX
@@ -679,6 +722,11 @@ namespace Unity.VisualScripting.FullSerializer
                         r += fsResult.Fail(ex.ToString());
                     }
                 }
+                return r;
+            }
+            catch (Exception ex)
+            {
+                r += fsResult.Fail($"FullSerializer Internal Error -- Error trying to deserialize: {storageType.CSharpFullName()}\n" + ex);
                 return r;
             }
             finally
@@ -802,7 +850,7 @@ namespace Unity.VisualScripting.FullSerializer
             }
             catch (Exception ex)
             {
-                deserializeResult += fsResult.Fail(ex.ToString());
+                deserializeResult += fsResult.Fail($"FullSerializer Internal Error -- Error trying to deserialize: {storageType.CSharpFullName()}\n" + ex);
                 return deserializeResult;
             }
 
@@ -811,7 +859,10 @@ namespace Unity.VisualScripting.FullSerializer
             // type, which may be the case when we have a versioned import graph.
             if (ReferenceEquals(result, null) || result.GetType() != objectType)
             {
-                result = GetConverter(objectType, overrideConverterType).CreateInstance(data, objectType);
+                // If GetConverter is null, result will safely be assigned null
+                result = GetConverter(objectType, overrideConverterType, out var fsResult)?.CreateInstance(data, objectType);
+
+                if (fsResult.Failed) return fsResult;
             }
 
             // We call OnBeforeDeserializeAfterInstanceCreation here because we
@@ -823,20 +874,28 @@ namespace Unity.VisualScripting.FullSerializer
             }
             catch (Exception ex)
             {
-                deserializeResult += fsResult.Fail(ex.ToString());
+                deserializeResult += fsResult.Fail($"FullSerializer Internal Error -- Error trying to deserialize: {storageType.CSharpFullName()}\n" + ex);
                 return deserializeResult;
             }
 
-            // NOTE: It is critically important that we pass the actual
-            //       objectType down instead of using result.GetType() because it
-            //       is not guaranteed that result.GetType() will equal
-            //       objectType, especially because some converters are known to
-            //       return dummy values for CreateInstance() (for example, the
-            //       default behavior for structs is to just return the type of
-            //       the struct).
+            try
+            {
+                // NOTE: It is critically important that we pass the actual
+                //       objectType down instead of using result.GetType() because it
+                //       is not guaranteed that result.GetType() will equal
+                //       objectType, especially because some converters are known to
+                //       return dummy values for CreateInstance() (for example, the
+                //       default behavior for structs is to just return the type of
+                //       the struct).
 
-            deserializeResult += InternalDeserialize_4_Cycles(overrideConverterType, data, objectType, ref result);
-            return deserializeResult;
+                deserializeResult += InternalDeserialize_4_Cycles(overrideConverterType, data, objectType, ref result);
+                return deserializeResult;
+            }
+            catch (Exception ex)
+            {
+                deserializeResult += fsResult.Fail($"FullSerializer Internal Error -- Error trying to deserialize: {objectType.CSharpFullName()}\n" + ex);
+                return deserializeResult;
+            }
         }
 
         private fsResult InternalDeserialize_4_Cycles(Type overrideConverterType, fsData data, Type resultType, ref object result)
@@ -871,7 +930,11 @@ namespace Unity.VisualScripting.FullSerializer
                 data = data.AsDictionary[Key_Content];
             }
 
-            return GetConverter(resultType, overrideConverterType).TryDeserialize(data, ref result, resultType);
+            var converter = GetConverter(resultType, overrideConverterType, out var fsResult);
+
+            if (fsResult.Failed) return fsResult;
+
+            return converter.TryDeserialize(data, ref result, resultType);
         }
 
 
@@ -880,109 +943,115 @@ namespace Unity.VisualScripting.FullSerializer
         {
             var objectType = defaultType;
             var dict = data.AsDictionary;
-
-            var typeNameData = dict[Key_InstanceType];
-            if (typeNameData.IsString == false)
+            try
             {
-                deserializeResult.AddMessage(Key_InstanceType + " value must be a string (in " + data + ")");
-                return objectType;
-            }
-
-            var typeName = typeNameData.AsString;
-
-            if (!RuntimeCodebase.TryDeserializeType(typeName, out var markedType))
-            {
-                if (IsVisualScriptingUnit(data))
+                var typeNameData = dict[Key_InstanceType];
+                if (typeNameData.IsString == false)
                 {
-                    //We store a copy of the node as a string in the hopes of being able to re-instantiate it later.
-                    dict[Key_UnitFormerValue] = new fsData(data.ToString());
-
-                    // We store the type that the unit should be, we will try to re-instantiate it if it becomes available again.
-                    dict[Key_UnitFormerType] = typeNameData;
-                    dict[Key_InstanceType] = new fsData(TypeName_MissingType);
-
-                    // TODO: Ideally this would display as an error in the console instead of a warning. Using fsResult.Fail() aborts the deserialization.
-                    deserializeResult += fsResult.Warn($"Type definition for '{typeName}' is missing.\nConverted '{typeName}' unit to '{TypeName_MissingType}'. Did you delete the type's script file?");
-
-                    return Type_MissingType;
+                    deserializeResult.AddMessage(Key_InstanceType + " value must be a string (in " + data + ")");
+                    return objectType;
                 }
 
-                // This message is redundant if the above warning gets logged.
-                deserializeResult += fsResult.Warn("Unable to find type: \"" + typeName + "\"");
-
-                return objectType;
-            }
-            // Check if the former type of the MissingType unit is defined again (if the user added back the unit script).
-            else if (typeName == TypeName_MissingType)
-            {
-                if (dict.ContainsKey(Key_UnitFormerType) && IsVisualScriptingUnit(data))
+                var typeName = typeNameData.AsString;
+                if (!RuntimeCodebase.TryDeserializeType(typeName, out var markedType))
                 {
-                    var formerTypeName = dict[Key_UnitFormerType].AsString;
-                    if (RuntimeCodebase.TryDeserializeType(formerTypeName, out var formerType))
+                    if (IsVisualScriptingUnit(data))
                     {
-                        // If the user tries to create a new script for the type, we must ensure that it derives from VS units so that it can be properly deserialized.
-                        if (defaultType.IsAssignableFrom(formerType))
-                        {
-                            //TODO: Add checks if the json can't be parsed to a unit.
-                            if (dict.ContainsKey(Key_UnitFormerValue))
-                            {
-                                // The node may have been moved while in dummy form.
-                                fsData newPosition = dict[Key_UnitPosition];
+                        //We store a copy of the node as a string in the hopes of being able to re-instantiate it later.
+                        dict[Key_UnitFormerValue] = new fsData(data.ToString());
 
-                                data = fsJsonParser.Parse(dict[Key_UnitFormerValue].AsString);
-                                dict = data.AsDictionary; // 'dict' and 'data' are meant to represent the same object.
-
-                                dict[Key_UnitPosition] = newPosition;
-
-                                deserializeResult += fsResult.Warn($"Missing unit type '{formerTypeName}' was found.\nConverted '{TypeName_MissingType}' unit back to '{formerTypeName}'");
-                            }
-                            else
-                            {
-                                // We want to restore the unit to its correct type.
-                                dict[Key_InstanceType] = new fsData(formerTypeName);
-                                deserializeResult += fsResult.Warn($"Missing unit type '{formerTypeName}' was found.\nConverted '{TypeName_MissingType}' unit back to '{formerTypeName}'\nNo former state can be found. Reverting node to defaults.\n" + data);
-                            }
-
-                            objectType = formerType;
-                            return objectType;
-                        }
+                        // We store the type that the unit should be, we will try to re-instantiate it if it becomes available again.
+                        dict[Key_UnitFormerType] = typeNameData;
+                        dict[Key_InstanceType] = new fsData(TypeName_MissingType);
 
                         // TODO: Ideally this would display as an error in the console instead of a warning. Using fsResult.Fail() aborts the deserialization.
-                        deserializeResult += fsResult.Warn($"Missing unit type '{formerTypeName}' was found, but is not assignable to '{defaultType.FullName}'. Did you forget to inherit from '{TypeName_Unit}'?");
+                        deserializeResult += fsResult.Warn($"Type definition for '{typeName}' is missing.\nConverted '{typeName}' unit to '{TypeName_MissingType}'. Did you delete the type's script file?");
+
+                        return Type_MissingType;
+                    }
+
+                    // This message is redundant if the above warning gets logged.
+                    deserializeResult += fsResult.Warn("Unable to find type: \"" + typeName + "\"");
+
+                    return objectType;
+                }
+                // Check if the former type of the MissingType unit is defined again (if the user added back the unit script).
+                else if (typeName == TypeName_MissingType)
+                {
+                    if (dict.ContainsKey(Key_UnitFormerType) && IsVisualScriptingUnit(data))
+                    {
+                        var formerTypeName = dict[Key_UnitFormerType].AsString;
+                        if (RuntimeCodebase.TryDeserializeType(formerTypeName, out var formerType))
+                        {
+                            // If the user tries to create a new script for the type, we must ensure that it derives from VS units so that it can be properly deserialized.
+                            if (defaultType.IsAssignableFrom(formerType))
+                            {
+                                //TODO: Add checks if the json can't be parsed to a unit.
+                                if (dict.ContainsKey(Key_UnitFormerValue))
+                                {
+                                    // The node may have been moved while in dummy form.
+                                    fsData newPosition = dict[Key_UnitPosition];
+
+                                    data = fsJsonParser.Parse(dict[Key_UnitFormerValue].AsString);
+                                    dict = data.AsDictionary; // 'dict' and 'data' are meant to represent the same object.
+
+                                    dict[Key_UnitPosition] = newPosition;
+
+                                    deserializeResult += fsResult.Warn($"Missing unit type '{formerTypeName}' was found.\nConverted '{TypeName_MissingType}' unit back to '{formerTypeName}'");
+                                }
+                                else
+                                {
+                                    // We want to restore the unit to its correct type.
+                                    dict[Key_InstanceType] = new fsData(formerTypeName);
+                                    deserializeResult += fsResult.Warn($"Missing unit type '{formerTypeName}' was found.\nConverted '{TypeName_MissingType}' unit back to '{formerTypeName}'\nNo former state can be found. Reverting node to defaults.\n" + data);
+                                }
+
+                                objectType = formerType;
+                                return objectType;
+                            }
+
+                            // TODO: Ideally this would display as an error in the console instead of a warning. Using fsResult.Fail() aborts the deserialization.
+                            deserializeResult += fsResult.Warn($"Missing unit type '{formerTypeName}' was found, but is not assignable to '{defaultType.FullName}'. Did you forget to inherit from '{TypeName_Unit}'?");
+                        }
+                        else
+                        {
+                            // TODO: Ideally this would display as an error in the console instead of a warning. Using fsResult.Fail() aborts the deserialization.
+                            deserializeResult += fsResult.Warn($"Type definition for '{formerTypeName}' unit is missing. Did you remove its script file?");
+                        }
                     }
                     else
                     {
-                        // TODO: Ideally this would display as an error in the console instead of a warning. Using fsResult.Fail() aborts the deserialization.
-                        deserializeResult += fsResult.Warn($"Type definition for '{formerTypeName}' unit is missing. Did you remove its script file?");
+                        deserializeResult += fsResult.Warn($"Serialized '{TypeName_MissingType}' unit has an unrecognized format.");
                     }
                 }
-                else
+
+                if (defaultType.IsAssignableFrom(markedType) == false)
                 {
-                    deserializeResult += fsResult.Warn($"Serialized '{TypeName_MissingType}' unit has an unrecognized format.");
-                }
-            }
+                    // It's possible that the user removes their custom node's inheritance from the VS unit type.
+                    if (IsVisualScriptingUnit(data))
+                    {
+                        // We store the type that the unit should be, we will try to re-instantiate it if it becomes valid again.
+                        dict[Key_UnitFormerType] = typeNameData;
+                        dict[Key_InstanceType] = new fsData(TypeName_MissingType);
 
-            if (defaultType.IsAssignableFrom(markedType) == false)
-            {
-                // It's possible that the user removes their custom node's inheritance from the VS unit type.
-                if (IsVisualScriptingUnit(data))
-                {
-                    // We store the type that the unit should be, we will try to re-instantiate it if it becomes valid again.
-                    dict[Key_UnitFormerType] = typeNameData;
-                    dict[Key_InstanceType] = new fsData(TypeName_MissingType);
+                        // TODO: Ideally this would display as an error in the console instead of a warning. Using fsResult.Fail() aborts the deserialization.
+                        deserializeResult += fsResult.Warn($"Type '{typeName}' is no longer assignable to '{defaultType.FullName}'. Did you remove inheritance from '{TypeName_Unit}'?\nConverted '{typeName}' unit to '{TypeName_MissingType}'.");
 
-                    // TODO: Ideally this would display as an error in the console instead of a warning. Using fsResult.Fail() aborts the deserialization.
-                    deserializeResult += fsResult.Warn($"Type '{typeName}' is no longer assignable to '{defaultType.FullName}'. Did you remove inheritance from '{TypeName_Unit}'?\nConverted '{typeName}' unit to '{TypeName_MissingType}'.");
+                        return Type_MissingType;
+                    }
 
-                    return Type_MissingType;
+                    deserializeResult.AddMessage("Ignoring type specifier; a field/property of type " + defaultType + " cannot hold an instance of " + markedType);
+                    return objectType;
                 }
 
-                deserializeResult.AddMessage("Ignoring type specifier; a field/property of type " + defaultType + " cannot hold an instance of " + markedType);
+                objectType = markedType;
                 return objectType;
             }
-
-            objectType = markedType;
-            return objectType;
+            catch (Exception ex)
+            {
+                deserializeResult += fsResult.Fail(ex.ToString());
+                return objectType;
+            }
         }
 
         /// <summary>
@@ -1278,11 +1347,11 @@ namespace Unity.VisualScripting.FullSerializer
             }
 
             // Key strings used in the legacy system
-            var referenceIdString = "ReferenceId";
-            var sourceIdString = "SourceId";
-            var sourceDataString = "Data";
-            var typeString = "Type";
-            var typeDataString = "Data";
+            const string referenceIdString = "ReferenceId";
+            const string sourceIdString = "SourceId";
+            const string sourceDataString = "Data";
+            const string typeString = "Type";
+            const string typeDataString = "Data";
 
             // type specifier
             if (dict.Count == 2 && dict.ContainsKey(typeString) && dict.ContainsKey(typeDataString))
