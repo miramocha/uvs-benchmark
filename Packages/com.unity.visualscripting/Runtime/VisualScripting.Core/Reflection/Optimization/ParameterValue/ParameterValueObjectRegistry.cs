@@ -2,6 +2,8 @@ using System;
 using System.Runtime.CompilerServices;
 #if UNITY_6000_6_OR_NEWER
 using Unity.Scripting.LifecycleManagement;
+using UnityEditor;
+
 #endif
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -144,6 +146,8 @@ namespace Unity.VisualScripting
 
 #if UNITY_6000_6_OR_NEWER
         [OnCodeInitializing]
+#elif UNITY_EDITOR
+        [InitializeOnEnterPlayMode]
 #else
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
 #endif
