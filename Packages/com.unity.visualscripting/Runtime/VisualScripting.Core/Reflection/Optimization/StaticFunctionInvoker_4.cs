@@ -1,18 +1,14 @@
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace Unity.VisualScripting
 {
     public sealed class StaticFunctionInvoker<TParam0, TParam1, TParam2, TParam3, TResult> : StaticFunctionInvokerBase<TResult>
     {
-        public unsafe StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo)
-        {
-            invoke = (delegate*<TParam0, TParam1, TParam2, TParam3, TResult>)methodInfo.MethodHandle.GetFunctionPointer();
-        }
+        public StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo) { }
 
-        private readonly unsafe delegate*<TParam0, TParam1, TParam2, TParam3, TResult> invoke;
+        private Func<TParam0, TParam1, TParam2, TParam3, TResult> invoke;
 
         public override object Invoke(object target, params object[] args)
         {
@@ -55,14 +51,12 @@ namespace Unity.VisualScripting
             return Invoke(target, args[0], args[1], args[2], args[3]);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe object InvokeUnsafe(object target, object arg0, object arg1, object arg2, object arg3)
+        public object InvokeUnsafe(object target, object arg0, object arg1, object arg2, object arg3)
         {
             return invoke((TParam0)arg0, (TParam1)arg1, (TParam2)arg2, (TParam3)arg3);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe ParameterValue InvokeUnsafe(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
+        public ParameterValue InvokeUnsafe(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
         {
             return ParameterValue.Create(invoke(arg0.Cast<TParam0>(), arg1.Cast<TParam1>(), arg2.Cast<TParam2>(), arg3.Cast<TParam3>()));
         }
@@ -97,10 +91,14 @@ namespace Unity.VisualScripting
 
         protected override void CompileExpression(MethodCallExpression callExpression, ParameterExpression[] parameterExpressions)
         {
+            invoke = Expression.Lambda<Func<TParam0, TParam1, TParam2, TParam3, TResult>>(callExpression, parameterExpressions).Compile();
         }
 
         protected override void CreateDelegate()
         {
+            invoke =
+                (Func<TParam0, TParam1, TParam2, TParam3, TResult>)methodInfo.CreateDelegate(
+                    typeof(Func<TParam0, TParam1, TParam2, TParam3, TResult>));
         }
     }
 }

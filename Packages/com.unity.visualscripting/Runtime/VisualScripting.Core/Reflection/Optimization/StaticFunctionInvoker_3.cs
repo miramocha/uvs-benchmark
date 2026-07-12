@@ -7,12 +7,9 @@ namespace Unity.VisualScripting
 {
     public sealed class StaticFunctionInvoker<TParam0, TParam1, TParam2, TResult> : StaticFunctionInvokerBase<TResult>
     {
-        public unsafe StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo)
-        {
-            invoke = (delegate*<TParam0, TParam1, TParam2, TResult>)methodInfo.MethodHandle.GetFunctionPointer();
-        }
+        public StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo) { }
 
-        private readonly unsafe delegate*<TParam0, TParam1, TParam2, TResult> invoke;
+        private Func<TParam0, TParam1, TParam2, TResult> invoke;
 
         public override object Invoke(object target, params object[] args)
         {
@@ -59,13 +56,13 @@ namespace Unity.VisualScripting
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe object InvokeUnsafe(object target, object arg0, object arg1, object arg2)
+        public object InvokeUnsafe(object target, object arg0, object arg1, object arg2)
         {
             return invoke((TParam0)arg0, (TParam1)arg1, (TParam2)arg2);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe ParameterValue InvokeUnsafe(ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
+        public ParameterValue InvokeUnsafe(ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
         {
             return ParameterValue.Create(invoke(arg0.Cast<TParam0>(), arg1.Cast<TParam1>(), arg2.Cast<TParam2>()));
         }
@@ -99,10 +96,12 @@ namespace Unity.VisualScripting
 
         protected override void CompileExpression(MethodCallExpression callExpression, ParameterExpression[] parameterExpressions)
         {
+            invoke = Expression.Lambda<Func<TParam0, TParam1, TParam2, TResult>>(callExpression, parameterExpressions).Compile();
         }
 
         protected override void CreateDelegate()
         {
+            invoke = (Func<TParam0, TParam1, TParam2, TResult>)methodInfo.CreateDelegate(typeof(Func<TParam0, TParam1, TParam2, TResult>));
         }
     }
 }

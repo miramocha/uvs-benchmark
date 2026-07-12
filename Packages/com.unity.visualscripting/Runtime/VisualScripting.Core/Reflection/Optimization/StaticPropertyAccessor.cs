@@ -3,7 +3,7 @@ using System.Reflection;
 
 namespace Unity.VisualScripting
 {
-    public sealed unsafe class StaticPropertyAccessor<TProperty> : OptimizedAccessorBase
+    public class StaticPropertyAccessor<TProperty> : OptimizedAccessorBase
     {
         public StaticPropertyAccessor(PropertyInfo propertyInfo)
         {
@@ -30,9 +30,9 @@ namespace Unity.VisualScripting
         }
 
         private readonly PropertyInfo propertyInfo;
-        private delegate*<TProperty> getter;
-        private delegate*<TProperty, void> setter;
-        private readonly Type targetType;
+        private Func<TProperty> getter;
+        private Action<TProperty> setter;
+        private Type targetType;
 
         public override void Compile()
         {
@@ -41,12 +41,12 @@ namespace Unity.VisualScripting
 
             if (getterInfo != null)
             {
-                getter = (delegate*<TProperty>)getterInfo.MethodHandle.GetFunctionPointer();
+                getter = (Func<TProperty>)getterInfo.CreateDelegate(typeof(Func<TProperty>));
             }
 
             if (setterInfo != null)
             {
-                setter = (delegate*<TProperty, void>)setterInfo.MethodHandle.GetFunctionPointer();
+                setter = (Action<TProperty>)setterInfo.CreateDelegate(typeof(Action<TProperty>));
             }
         }
 

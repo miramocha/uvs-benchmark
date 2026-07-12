@@ -1,19 +1,14 @@
 using System;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace Unity.VisualScripting
 {
     public sealed class StaticFunctionInvoker<TResult> : StaticFunctionInvokerBase<TResult>
     {
-        public unsafe StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo)
-        {
-            invoke = (delegate*<TResult>)methodInfo.MethodHandle.GetFunctionPointer();
-        }
+        public StaticFunctionInvoker(MethodInfo methodInfo) : base(methodInfo) { }
 
-        private readonly unsafe delegate*<TResult> invoke;
-
+        private Func<TResult> invoke;
 
         public override object Invoke(object target, params object[] args)
         {
@@ -81,15 +76,15 @@ namespace Unity.VisualScripting
             return InvokeUnsafe();
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe object InvokeUnsafe(object target)
+
+        public object InvokeUnsafe(object target)
         {
-            return invoke();
+            return invoke.Invoke();
         }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public unsafe ParameterValue InvokeUnsafe()
+
+        public ParameterValue InvokeUnsafe()
         {
-            return ParameterValue.Create(invoke());
+            return ParameterValue.Create(invoke.Invoke());
         }
 
         protected override Type[] GetParameterTypes()
@@ -99,10 +94,12 @@ namespace Unity.VisualScripting
 
         protected override void CompileExpression(MethodCallExpression callExpression, ParameterExpression[] parameterExpressions)
         {
+            invoke = Expression.Lambda<Func<TResult>>(callExpression, parameterExpressions).Compile();
         }
 
         protected override void CreateDelegate()
         {
+            invoke = (Func<TResult>)methodInfo.CreateDelegate(typeof(Func<TResult>));
         }
     }
 }

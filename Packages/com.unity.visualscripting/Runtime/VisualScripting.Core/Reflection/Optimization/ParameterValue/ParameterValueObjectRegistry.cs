@@ -1,12 +1,13 @@
 using System;
 using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace Unity.VisualScripting
 {
-    public static class ParameterValueObjectRegistry
+    public static partial class ParameterValueObjectRegistry
     {
         private const int PageShift = 12;
         private const int PageSize = 1 << PageShift;
@@ -136,13 +137,7 @@ namespace Unity.VisualScripting
             }
         }
 
-#if UNITY_EDITOR
-        [UnityEditor.InitializeOnEnterPlayMode]
-        [UsedImplicitly]
-        private static void OnEnterPlayModeInEditor() => Purge();
-#endif
-
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        [OnCodeInitializing]
         private static void OnSubsystemInit()
         {
             Purge();
