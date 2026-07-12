@@ -1,13 +1,18 @@
 using System;
 using System.Runtime.CompilerServices;
-using JetBrains.Annotations;
+#if UNITY_6000_6_OR_NEWER
 using Unity.Scripting.LifecycleManagement;
+#endif
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace Unity.VisualScripting
 {
+#if UNITY_6000_6_OR_NEWER
     public static partial class ParameterValueObjectRegistry
+#else
+    public static class ParameterValueObjectRegistry
+#endif
     {
         private const int PageShift = 12;
         private const int PageSize = 1 << PageShift;
@@ -137,14 +142,16 @@ namespace Unity.VisualScripting
             }
         }
 
+#if UNITY_6000_6_OR_NEWER
         [OnCodeInitializing]
+#else
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+#endif
         private static void OnSubsystemInit()
         {
             Purge();
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
-            Application.lowMemory -= TrimExcess;
-            Application.lowMemory += TrimExcess;
         }
 
         private static void OnSceneUnloaded(Scene scene) => TrimExcess();
