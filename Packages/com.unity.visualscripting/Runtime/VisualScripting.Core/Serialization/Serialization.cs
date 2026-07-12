@@ -77,6 +77,12 @@ namespace Unity.VisualScripting
         public static void CloneViaSerializationInto<TSource, TDestination>(this TSource value, ref TDestination instance, bool forceReflected = false)
             where TDestination : TSource
         {
+            if (value != null && !typeof(TDestination).IsAssignableFrom(value.GetType()))
+            {
+                Debug.LogError($"[Serialization] Type mismatch: Attempted to clone {value.GetType()} into {typeof(TDestination)}. " + "This would violate generic constraints and crash the JIT/Verifier.");
+                return;
+            }
+
             object _instance = instance;
             DeserializeInto(Serialize(value, forceReflected), ref _instance, forceReflected);
         }
@@ -205,9 +211,9 @@ namespace Unity.VisualScripting
             using (ProfilingUtility.SampleBlock("DeserializeJson"))
             {
 #endif
-                fsResult result = DeserializeJsonUtil(serializer, json, ref instance, forceReflected);
+            fsResult result = DeserializeJsonUtil(serializer, json, ref instance, forceReflected);
 
-                HandleResult("Deserialization", result, instance as UnityObject);
+            HandleResult("Deserialization", result, instance as UnityObject);
 #if ENABLE_UVS_SERIALIZATION_PROFILING
             }
 #endif

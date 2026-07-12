@@ -66,13 +66,9 @@ namespace Unity.VisualScripting
             }
 
             // Construct the final closed-constructed method from the resolved arguments
-
             var openConstructedGenericArguments = openConstructedMethod.GetGenericArguments();
             var closedConstructedGenericArguments = openConstructedGenericArguments.Select(openConstructedGenericArgument =>
             {
-                // If the generic argument has been successfully resolved, use it;
-                // otherwise, leave the open-constructed argument in place.
-
                 if (resolvedGenericParameters.ContainsKey(openConstructedGenericArgument))
                 {
                     return resolvedGenericParameters[openConstructedGenericArgument];
@@ -83,7 +79,14 @@ namespace Unity.VisualScripting
                 }
             }).ToArray();
 
-            return openConstructedMethod.MakeGenericMethod(closedConstructedGenericArguments);
+            try
+            {
+                return openConstructedMethod.MakeGenericMethod(closedConstructedGenericArguments);
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public static bool IsGenericExtension(this MethodInfo methodInfo)
@@ -105,10 +108,11 @@ namespace Unity.VisualScripting
                         var closedConstructedParameterTypes = thisArgumentType.Yield().Concat(extensionMethod.GetParametersWithoutThis().Select(p => p.ParameterType));
 
                         var closedConstructedMethod = extensionMethod.MakeGenericMethodVia(closedConstructedParameterTypes.ToArray());
-
-                        GenericExtensionMethods.Value.Add(closedConstructedMethod);
-
-                        yield return closedConstructedMethod;
+                        if (closedConstructedMethod != null)
+                        {
+                            GenericExtensionMethods.Value.Add(closedConstructedMethod);
+                            yield return closedConstructedMethod;
+                        }
                     }
                     else
                     {
