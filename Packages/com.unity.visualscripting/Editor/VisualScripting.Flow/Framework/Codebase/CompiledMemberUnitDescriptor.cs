@@ -100,7 +100,7 @@ namespace Unity.VisualScripting
         {
             get
             {
-                if (_eventIcon == null || _eventIcon.Single() == null)
+                if (_eventIcon == null)
                 {
                     _eventIcon = null;
 
