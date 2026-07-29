@@ -562,18 +562,21 @@ namespace Unity.VisualScripting
 
         private static IEnumerable<IUnitOption> GetMemberOptions(Member member)
         {
-            // Operators are handled with special math units
-            // that are more elegant than the raw methods
-            if (member.isOperator)
-            {
-                yield break;
-            }
+            // Since MemberUnit's can now be compiled I feel it's better for performance
+            // to expose these member specifically which also should use ParameterValue
+            // to avoid boxing common types.
+            // // Operators are handled with special math units
+            // // that are more elegant than the raw methods
+            // if (member.isOperator)
+            // {
+            //     yield break;
+            // }
 
-            // Conversions are handled automatically by connections
-            if (member.isConversion)
-            {
-                yield break;
-            }
+            // // Conversions are handled automatically by connections
+            // if (member.isConversion)
+            // {
+            //     yield break;
+            // }
 
             if (member.isAccessor)
             {

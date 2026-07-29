@@ -1,3 +1,5 @@
+using System;
+
 namespace Unity.VisualScripting
 {
     [Descriptor(typeof(Sequence))]
@@ -11,7 +13,7 @@ namespace Unity.VisualScripting
 
             if (port is ControlOutput)
             {
-                var index = unit.multiOutputs.IndexOf((ControlOutput)port);
+                var index = Array.IndexOf(unit.multiOutputs, (ControlOutput)port);
 
                 if (index >= 0)
                 {

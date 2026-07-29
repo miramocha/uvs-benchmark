@@ -46,7 +46,8 @@ namespace Unity.VisualScripting
             return string.Compare(Identification, other.Identification, StringComparison.Ordinal);
         }
     }
-
+    
+    [TypeIcon(typeof(Nullable))]
     public class Unknown
     {
         public const string Identification = "__UNKNOWN";

@@ -13,14 +13,24 @@ namespace Unity.VisualScripting
 
         public override object Invoke(object target, params object[] args)
         {
-            ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
-            return invoke(ref tempTarget);
+            if (target is TTarget)
+            {
+                ref TTarget t = ref Unsafe.Unbox<TTarget>(target);
+                return invoke(ref t);
+            }
+
+            throw new InvalidCastException();
         }
 
         public override object Invoke(object target)
         {
-            ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
-            return invoke(ref tempTarget);
+            if (target is TTarget)
+            {
+                ref TTarget t = ref Unsafe.Unbox<TTarget>(target);
+                return invoke(ref t);
+            }
+
+            throw new InvalidCastException();
         }
 
         public override ParameterValue Invoke(ParameterValue target, Span<ParameterValue> args)
@@ -35,14 +45,17 @@ namespace Unity.VisualScripting
 
         public override ParameterValue InvokeRef(ref ParameterValue target)
         {
-            // This should handle: Variables, Literals and Port DefaultValues
+            // This should handle: Variables and Literals.
+            // since this is visual scripting's normal functionality
             if (target.IsBoxed)
             {
-                if (target.ObjectValue is TTarget)
+                ref TTarget t = ref target.TryUnbox<TTarget>(out var canUnbox);
+                if (canUnbox)
                 {
-                    return ParameterValue.Create(invoke(ref target.Unbox<TTarget>()));
+                    return ParameterValue.Create(invoke(ref t));
                 }
-                else if (target.IsBoxedNumeric)
+
+                if (target.IsBoxedNumeric)
                 {
                     TTarget converted = target.AsNumeric<TTarget>();
                     return ParameterValue.Create(invoke(ref converted));

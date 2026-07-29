@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 
 namespace Unity.VisualScripting
 {
@@ -36,7 +37,13 @@ namespace Unity.VisualScripting
 
         public readonly override int GetHashCode()
         {
-            return HashCode.Combine(name, target, tag);
+            unchecked
+            {
+                int hash = name != null ? RuntimeHelpers.GetHashCode(name) : 0;
+                hash = (hash * 397) ^ (target != null ? RuntimeHelpers.GetHashCode(target) : 0);
+                hash = (hash * 397) ^ (tag != null ? RuntimeHelpers.GetHashCode(tag) : 0);
+                return hash;
+            }
         }
 
         public static bool operator ==(EventHook a, EventHook b)

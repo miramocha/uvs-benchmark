@@ -52,78 +52,81 @@ namespace Unity.VisualScripting
             Assignment(enter, currentIndex);
         }
 
-        private int Start(Flow flow, out int currentIndex, out int lastIndex, out bool ascending)
-        {
-            var firstIndex = flow.GetValue<int>(this.firstIndex);
-            lastIndex = flow.GetValue<int>(this.lastIndex);
-            ascending = firstIndex <= lastIndex;
-            currentIndex = firstIndex;
-            flow.SetValue(this.currentIndex, currentIndex);
-
-            return flow.EnterLoop();
-        }
-
-        private bool CanMoveNext(int currentIndex, int lastIndex, bool ascending)
-        {
-            if (ascending)
-            {
-                return currentIndex < lastIndex;
-            }
-            else
-            {
-                return currentIndex > lastIndex;
-            }
-        }
-
-        private void MoveNext(Flow flow, ref int currentIndex)
-        {
-            currentIndex += flow.GetValue<int>(step);
-            flow.SetValue(this.currentIndex, currentIndex);
-        }
-
         protected override ControlOutput Loop(Flow flow)
         {
-            var loop = Start(flow, out int currentIndex, out int lastIndex, out bool ascending);
+            var stepVal = flow.GetValueData(step).ToInt32();
 
-            if (!IsStepValueZero())
+            if (stepVal == 0) return exit;
+
+            var first = flow.GetValueData(firstIndex).ToInt32();
+            var last = flow.GetValueData(lastIndex).ToInt32();
+
+            var ascending = first <= last;
+
+            var loop = flow.EnterLoop();
+            var stack = flow.PreserveStack();
+
+            try
             {
-                var stack = flow.PreserveStack();
-
-                while (flow.LoopIsNotBroken(loop) && CanMoveNext(currentIndex, lastIndex, ascending))
+                for (int current = first; ascending ? current < last : current > last; current += stepVal)
                 {
+                    if (!flow.LoopIsNotBroken(loop)) break;
+
+                    flow.SetValue(currentIndex, current);
+
                     flow.Invoke(body);
-
                     flow.RestoreStack(stack);
-
-                    MoveNext(flow, ref currentIndex);
                 }
-
-                flow.DisposePreservedStack(stack);
             }
-
-            flow.ExitLoop(loop);
+            catch
+            {
+                flow.RestoreStack(stack);
+            }
+            finally
+            {
+                flow.DisposePreservedStack(stack);
+                flow.ExitLoop(loop);
+            }
 
             return exit;
         }
 
         protected override IEnumerator LoopCoroutine(Flow flow)
         {
-            var loop = Start(flow, out int currentIndex, out int lastIndex, out bool ascending);
+            var stepVal = flow.GetValue<int>(step);
 
-            var stack = flow.PreserveStack();
-
-            while (flow.LoopIsNotBroken(loop) && CanMoveNext(currentIndex, lastIndex, ascending))
+            if (stepVal == 0)
             {
-                yield return body;
-
-                flow.RestoreStack(stack);
-
-                MoveNext(flow, ref currentIndex);
+                yield return exit;
+                yield break;
             }
 
-            flow.DisposePreservedStack(stack);
+            var first = flow.GetValue<int>(firstIndex);
+            var last = flow.GetValue<int>(lastIndex);
+            var ascending = first <= last;
 
-            flow.ExitLoop(loop);
+            var loop = flow.EnterLoop();
+            var stack = flow.PreserveStack();
+
+            try
+            {
+                for (int current = first; ascending ? current < last : current > last; current += stepVal)
+                {
+                    if (!flow.LoopIsNotBroken(loop)) break;
+
+                    flow.SetValue(currentIndex, current);
+
+                    yield return body;
+
+                    flow.RestoreStack(stack);
+                }
+            }
+            finally
+            {
+                flow.RestoreStack(stack);
+                flow.DisposePreservedStack(stack);
+                flow.ExitLoop(loop);
+            }
 
             yield return exit;
         }

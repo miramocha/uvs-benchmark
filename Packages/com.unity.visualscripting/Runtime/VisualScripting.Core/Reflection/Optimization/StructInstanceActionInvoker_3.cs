@@ -16,16 +16,26 @@ namespace Unity.VisualScripting
 
         public override object Invoke(object target, params object[] args)
         {
-            ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
-            invoke(ref tempTarget, (TParam0)args[0], (TParam1)args[1], (TParam2)args[2]);
-            return null;
+            if (target is TTarget)
+            {
+                ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
+                invoke(ref tempTarget, (TParam0)args[0], (TParam1)args[1], (TParam2)args[2]);
+                return null;
+            }
+
+            throw new InvalidCastException();
         }
 
         public override object Invoke(object target, object arg0, object arg1, object arg2)
         {
-            ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
-            invoke(ref tempTarget, (TParam0)arg0, (TParam1)arg1, (TParam2)arg2);
-            return null;
+            if (target is TTarget)
+            {
+                ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
+                invoke(ref tempTarget, (TParam0)arg0, (TParam1)arg1, (TParam2)arg2);
+                return null;
+            }
+
+            throw new InvalidCastException();
         }
 
         public override ParameterValue Invoke(ParameterValue target, Span<ParameterValue> args)
@@ -40,18 +50,25 @@ namespace Unity.VisualScripting
 
         public override ParameterValue InvokeRef(ref ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
         {
-            // This should handle: Variables, Literals and Port DefaultValues
+            var a0 = arg0.Cast<TParam0>();
+            var a1 = arg1.Cast<TParam1>();
+            var a2 = arg2.Cast<TParam2>();
+
+            // This should handle: Variables and Literals.
+            // since this is visual scripting's normal functionality
             if (target.IsBoxed)
             {
-                if (target.ObjectValue is TTarget)
+                ref TTarget t = ref target.TryUnbox<TTarget>(out var canUnbox);
+                if (canUnbox)
                 {
-                    invoke(ref target.Unbox<TTarget>(), arg0.Cast<TParam0>(), arg1.Cast<TParam1>(), arg2.Cast<TParam2>());
+                    invoke(ref t, a0, a1, a2);
                     return ParameterValue.None;
                 }
-                else if (target.IsBoxedNumeric)
+
+                if (target.IsBoxedNumeric)
                 {
                     TTarget converted = target.AsNumeric<TTarget>();
-                    invoke(ref converted, arg0.Cast<TParam0>(), arg1.Cast<TParam1>(), arg2.Cast<TParam2>());
+                    invoke(ref converted, a0, a1, a2);
                     return ParameterValue.None;
                 }
             }
@@ -59,9 +76,7 @@ namespace Unity.VisualScripting
             // Allow conversion this will remove the reference but works the same as Normal Visual Scripting.
 
             TTarget tempTarget = target.Cast<TTarget>();
-
-            invoke(ref tempTarget, arg0.Cast<TParam0>(), arg1.Cast<TParam1>(), arg2.Cast<TParam2>());
-
+            invoke(ref tempTarget, a0, a1, a2);
             target = ParameterValue.Create(tempTarget);
 
             return ParameterValue.None;

@@ -66,8 +66,8 @@ namespace Unity.VisualScripting
         /// <summary>
         ///    Don't use this field. It is for Unity Visual Scripting internal usage only.
         /// </summary>
-        public override bool skip =>
+        public override bool skip => (
             stub.ReflectedType is { Name: "NetworkManager", Namespace: "Unity.Netcode" }
-            && stub.Name is "__rpc_func_table" or "__rpc_name_table";
+            && stub.Name is "__rpc_func_table" or "__rpc_name_table") || base.skip;
     }
 }

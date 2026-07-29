@@ -330,7 +330,7 @@ namespace Unity.VisualScripting
     {
         internal Type type;
         private TypeFilter _typeFilter;
-        private ISystemObjectInspector inspector;
+        internal ISystemObjectInspector inspector;
 
         public bool chooseType => true;
         public bool showValue => type != null && InspectorProvider.instance.GetDecoratorType(type) != typeof(SystemObjectInspector);

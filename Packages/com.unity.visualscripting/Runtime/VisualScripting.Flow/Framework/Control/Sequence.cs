@@ -31,15 +31,13 @@ namespace Unity.VisualScripting
         }
 
         [DoNotSerialize]
-        public ReadOnlyCollection<ControlOutput> multiOutputs { get; private set; }
+        public ControlOutput[] multiOutputs { get; private set; }
 
         protected override void Definition()
         {
             enter = ControlInputCoroutine(nameof(enter), Enter, EnterCoroutine);
 
-            var _multiOutputs = new List<ControlOutput>();
-
-            multiOutputs = _multiOutputs.AsReadOnly();
+            multiOutputs = new ControlOutput[outputCount];
 
             for (var i = 0; i < outputCount; i++)
             {
@@ -47,15 +45,22 @@ namespace Unity.VisualScripting
 
                 Succession(enter, output);
 
-                _multiOutputs.Add(output);
+                multiOutputs[i] = output;
             }
         }
 
         private ControlOutput Enter(Flow flow)
         {
+            var length = multiOutputs.Length;
+
+            if (length == 1)
+            {
+                return multiOutputs[0];
+            }
+
             var stack = flow.PreserveStack();
 
-            for (int i = 0; i < multiOutputs.Count; i++)
+            for (int i = 0; i < length; i++)
             {
                 flow.Invoke(multiOutputs[i]);
 
@@ -69,9 +74,17 @@ namespace Unity.VisualScripting
 
         private IEnumerator EnterCoroutine(Flow flow)
         {
+            var length = multiOutputs.Length;
+
+            if (length == 1)
+            {
+                yield return multiOutputs[0];
+                yield break;
+            }
+
             var stack = flow.PreserveStack();
 
-            for (int i = 0; i < multiOutputs.Count; i++)
+            for (int i = 0; i < length; i++)
             {
                 yield return multiOutputs[i];
 

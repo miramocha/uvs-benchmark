@@ -58,7 +58,7 @@ namespace Unity.VisualScripting
             instance.DeleteAotStubs();
         }
 
-        [MenuItem("internal:Visual Scripting/Run AOT Pre-Build", priority = LudiqProduct.DeveloperToolsMenuPriority + 1001)]
+        [MenuItem("Visual Scripting/Run AOT Pre-Build", priority = LudiqProduct.DeveloperToolsMenuPriority + 1001)]
         public static void GenerateFromInternalMenu()
         {
             if (instance == null)

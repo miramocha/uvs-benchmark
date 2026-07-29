@@ -10,6 +10,8 @@ namespace Unity.VisualScripting
         private static readonly Func<Recursion<T>> recursionFactory = static () => new Recursion<T>();
 
         private T[] traversedStack;
+        private readonly Dictionary<T, int> recursionCounts;
+
         private int traversedSize;
         private bool disposed;
         protected int maxDepth;
@@ -17,6 +19,7 @@ namespace Unity.VisualScripting
         protected Recursion()
         {
             traversedStack = new T[64];
+            recursionCounts = new Dictionary<T, int>(64, Comparer);
             traversedSize = 0;
         }
 
@@ -35,19 +38,14 @@ namespace Unity.VisualScripting
                 throw new ObjectDisposedException(ToString());
             }
 
-            int matchCount = 0;
+            recursionCounts.TryGetValue(o, out int count);
 
-            for (int i = traversedSize - 1; i >= 0; i--)
+            if (count >= maxDepth)
             {
-                if (Comparer.Equals(traversedStack[i], o))
-                {
-                    matchCount++;
-                    if (matchCount >= maxDepth)
-                    {
-                        return false;
-                    }
-                }
+                return false;
             }
+
+            recursionCounts[o] = count + 1;
 
             if (traversedSize >= traversedStack.Length)
             {
@@ -55,6 +53,7 @@ namespace Unity.VisualScripting
             }
 
             traversedStack[traversedSize++] = o;
+
             return true;
         }
 
@@ -68,14 +67,24 @@ namespace Unity.VisualScripting
             int lastIdx = traversedSize - 1;
             var current = traversedStack[lastIdx];
 
-            if (!Comparer.Equals(o, current))
+            if (!Comparer.Equals(current, o))
             {
                 throw new InvalidOperationException($"Exiting recursion stack in a non-consecutive order:\nProvided: {o} / Expected: {current}");
             }
 
             traversedStack[lastIdx] = default;
-
             traversedSize--;
+
+            int count = recursionCounts[current] - 1;
+
+            if (count == 0)
+            {
+                recursionCounts.Remove(current);
+            }
+            else
+            {
+                recursionCounts[current] = count;
+            }
         }
 
         public void Dispose()
@@ -101,8 +110,11 @@ namespace Unity.VisualScripting
         void IPoolable.Free()
         {
             disposed = true;
+
             Array.Clear(traversedStack, 0, traversedSize);
             traversedSize = 0;
+
+            recursionCounts.Clear();
         }
 
         public static Recursion<T> New()
@@ -123,9 +135,7 @@ namespace Unity.VisualScripting
             }
 
             var recursion = GenericPool<Recursion<T>>.New(recursionFactory);
-
             recursion.maxDepth = maxDepth;
-
             return recursion;
         }
     }

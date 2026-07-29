@@ -116,7 +116,7 @@ namespace Unity.VisualScripting
         {
             get
             {
-                if (_darkEventIcon == null)
+                if (_darkEventIcon == null || !_darkEventIcon.IsValid())
                 {
                     Texture2D originalTex = typeof(BoltUnityEvent).Icon()?[IconSize.Small];
 
@@ -125,7 +125,6 @@ namespace Unity.VisualScripting
                         return null;
                     }
 
-                    // Note: Ensure the color is valid
                     Texture2D solidColorTex = originalTex.CreateSolidColorTextureCopy(new Color(0.15f, 0.15f, 0.15f));
                     _darkEventIcon = EditorTexture.Single(solidColorTex);
                 }

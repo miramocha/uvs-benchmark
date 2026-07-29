@@ -1,3 +1,4 @@
+#pragma warning disable UAC0009 // DEVELOPMENT_BUILD usage
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -17,6 +18,13 @@ namespace Unity.VisualScripting
             EnabledWhenVisible = 1,
             Disabled = 2
         }
+        public enum FlowRecursionSafety
+        {
+            None = 0,
+            Editor = 1,
+            Build = 2,
+            EditorAndBuild = 3,
+        }
         // We need to check for recursion by passing some additional
         // context information to avoid the same port in multiple different
         // nested flow graphs to count as the same item. Naively,
@@ -30,16 +38,11 @@ namespace Unity.VisualScripting
         {
             public readonly IUnitPort port;
             public readonly IGraphParent context;
-            private readonly int _hash;
 
             public RecursionNode(IUnitPort port, GraphPointer context)
             {
                 this.port = port;
                 this.context = context.parent;
-
-                _hash = HashCode.Combine(
-                    RuntimeHelpers.GetHashCode(this.port),
-                    RuntimeHelpers.GetHashCode(this.context));
             }
 
             public bool Equals(RecursionNode other)
@@ -49,7 +52,15 @@ namespace Unity.VisualScripting
 
             public override bool Equals(object obj) => obj is RecursionNode other && Equals(other);
 
-            public override int GetHashCode() => _hash;
+            public override int GetHashCode()
+            {
+                unchecked
+                {
+                    int hash = port != null ? RuntimeHelpers.GetHashCode(port) : 0;
+                    hash = (hash * 397) ^ (context != null ? RuntimeHelpers.GetHashCode(context) : 0);
+                    return hash;
+                }
+            }
         }
 
         private GraphStack _stack;
@@ -95,44 +106,43 @@ namespace Unity.VisualScripting
             {
                 var entries = _entries;
                 int m = _mask;
-                uint hash = (uint)RuntimeHelpers.GetHashCode(key) * 2654435769u;
+                uint hash = key.Hash;
+
                 int index = (int)(hash >> _shift) & m;
 
-                while (true)
-                {
-                    ref Entry entry = ref entries[index];
-                    if (entry.Key == null) break;
+                ref readonly Entry entry = ref entries[index];
 
+                while (entry.Key != null)
+                {
                     if (ReferenceEquals(entry.Key, key))
                     {
                         return true;
                     }
-
                     index = (index + 1) & m;
+                    entry = ref entries[index];
                 }
 
                 return false;
             }
-            
+
             public bool TryGetValue(IUnitValuePort key, out ParameterValue value)
             {
                 var entries = _entries;
                 int m = _mask;
-                uint hash = (uint)RuntimeHelpers.GetHashCode(key) * 2654435769u;
+                uint hash = key.Hash;
                 int index = (int)(hash >> _shift) & m;
 
-                while (true)
-                {
-                    ref Entry entry = ref entries[index];
-                    if (entry.Key == null) break;
+                ref readonly Entry entry = ref entries[index];
 
+                while (entry.Key != null)
+                {
                     if (ReferenceEquals(entry.Key, key))
                     {
                         value = entry.Value;
                         return true;
                     }
-
                     index = (index + 1) & m;
+                    entry = ref entries[index];
                 }
 
                 value = default;
@@ -143,29 +153,28 @@ namespace Unity.VisualScripting
             {
                 var entries = _entries;
                 int m = _mask;
-                uint hash = (uint)RuntimeHelpers.GetHashCode(key) * 2654435769u;
+                uint hash = key.Hash;
                 int i = (int)(hash >> _shift) & m;
 
-                while (true)
-                {
-                    ref Entry entry = ref entries[i];
-                    if (entry.Key == null) break;
+                ref Entry entry = ref entries[i];
 
+                while (entry.Key != null)
+                {
                     if (ReferenceEquals(entry.Key, key))
                     {
                         exists = true;
                         return ref entry.Value;
                     }
-
                     i = (i + 1) & m;
+                    entry = ref entries[i];
                 }
 
                 if (_count >= _resizeAmount)
                 {
                     Resize();
-
                     entries = _entries;
                     m = _mask;
+
                     i = (int)(hash >> _shift) & m;
 
                     while (entries[i].Key != null)
@@ -209,7 +218,7 @@ namespace Unity.VisualScripting
                     var key = oldEntries[i].Key;
                     if (key != null)
                     {
-                        uint hash = (uint)RuntimeHelpers.GetHashCode(key) * 2654435769u;
+                        uint hash = key.Hash;
                         int idx = (int)(hash >> newShift) & newMask;
 
                         while (newEntries[idx].Key != null)
@@ -336,7 +345,9 @@ namespace Unity.VisualScripting
         {
             disposed = false;
 
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
             recursion = Recursion<RecursionNode>.New();
+#endif
         }
 
         public void Dispose()
@@ -352,7 +363,9 @@ namespace Unity.VisualScripting
         void IPoolable.Free()
         {
             _stack?.Dispose();
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
             recursion?.Dispose();
+#endif
             loops.Clear();
             variables.Clear();
 
@@ -396,6 +409,7 @@ namespace Unity.VisualScripting
             return preservedStack;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void RestoreStack(GraphStack stack)
         {
             _stack.CopyFrom(stack, false);
@@ -415,6 +429,7 @@ namespace Unity.VisualScripting
 
         public int currentLoop => _currentLoop;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool LoopIsNotBroken(int loop)
         {
             return _currentLoop == loop;
@@ -580,70 +595,46 @@ namespace Unity.VisualScripting
             }
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Invoke(ControlOutput output)
         {
             if (output == null) ThrowArgumentNull(nameof(output));
 
             var input = output.connectedControlInput;
             if (input == null) return;
-
-#if ENABLE_UVS_PROFILING
-            var marker = input.ProfilerMarker;
-            marker.Begin(_stack.rootObject);
-
-            try
-            {
-#endif
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
             var recursionNode = new RecursionNode(output, _stack);
             BeforeInvoke(output, recursionNode);
-
+#endif
             try
             {
-                if (input.requiresCoroutine)
-                    ThrowCoroutineException(input);
+#if ENABLE_UVS_PROFILING
+                var marker = input.ProfilerMarker;
+                marker.Begin(_stack.rootObject);
+                try 
+                {
+#endif
+                if (input.requiresCoroutine) ThrowCoroutineException(input);
 
                 var nextPort = input.action(this);
-                if (nextPort != null)
+                if (nextPort != null && nextPort.connectedControlInput != null)
                 {
                     Invoke(nextPort);
                 }
+#if ENABLE_UVS_PROFILING
+                } 
+                finally { marker.End(); }
+#endif
             }
             catch (Exception ex)
             {
                 HandleException(ex, output, input);
                 throw;
             }
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
             finally
             {
                 AfterInvoke(recursionNode);
-            }
-#else
-            if (input == null) return;
-
-            try
-            {
-                if (input.requiresCoroutine)
-                    ThrowCoroutineException(input);
-
-                var nextPort = input.action(this);
-                if (nextPort != null)
-                {
-                    Invoke(nextPort);
-                }
-            }
-            catch (Exception ex)
-            {
-                HandleException(ex, output, input);
-                throw;
-            }
-#endif
-#if ENABLE_UVS_PROFILING
-            }
-            finally
-            {
-                marker.End();
             }
 #endif
         }
@@ -660,15 +651,15 @@ namespace Unity.VisualScripting
             throw new InvalidOperationException($"Port '{input.key}' on '{input.unit}' can only be triggered in a coroutine.");
         }
 
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private IEnumerable InvokeCoroutine(ControlOutput output)
         {
-            Ensure.That(nameof(output)).IsNotNull(output);
+            if (output == null) ThrowArgumentNull(nameof(output));
 
             ControlInput input = output.connectedControlInput;
             if (input == null) yield break;
 
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
             var recursionNode = new RecursionNode(output, _stack);
             BeforeInvoke(output, recursionNode);
 #endif
@@ -691,7 +682,7 @@ namespace Unity.VisualScripting
                 catch (Exception ex)
                 {
                     HandleException(ex, output, input);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
                     AfterInvoke(recursionNode);
 #endif
                     throw;
@@ -699,38 +690,39 @@ namespace Unity.VisualScripting
 
                 foreach (var instruction in instructions)
                 {
-                    if (instruction is ControlOutput controlOutput)
+                    if (instruction is ControlOutput controlOutput && controlOutput.connectedControlInput != null)
                     {
                         foreach (var unwrappedInstruction in InvokeCoroutine(controlOutput))
                         {
 #if ENABLE_UVS_PROFILING
-                                if (isMarkerOpen)
-                                {
-                                    marker.End();
-                                    isMarkerOpen = false;
-                                }
+                            if (isMarkerOpen)
+                            {
+                                marker.End();
+                                isMarkerOpen = false;
+                            }
 #endif
                             yield return unwrappedInstruction;
                         }
 
 #if ENABLE_UVS_PROFILING
-                            if (!isMarkerOpen)
-                            {
-                                marker.Begin(context);
-                                isMarkerOpen = true;
-                            }
+                        if (!isMarkerOpen)
+                        {
+                            marker.Begin(context);
+                            isMarkerOpen = true;
+                        }
 #endif
                     }
                     else
                     {
 #if ENABLE_UVS_PROFILING
-                            if (isMarkerOpen)
-                            {
-                                marker.End(); isMarkerOpen = false;
-                            }
-                            yield return instruction;
-                            marker.Begin(context);
-                            isMarkerOpen = true;
+                        if (isMarkerOpen)
+                        {
+                            marker.End(); isMarkerOpen = false;
+                        }
+
+                        yield return instruction;
+                        marker.Begin(context);
+                        isMarkerOpen = true;
 #else
                         yield return instruction;
 #endif
@@ -750,22 +742,22 @@ namespace Unity.VisualScripting
                 catch (Exception ex)
                 {
                     HandleException(ex, output, input);
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
                     AfterInvoke(recursionNode);
 #endif
                     throw;
                 }
 
-                if (nextPort != null)
+                if (nextPort != null && nextPort.connectedControlInput != null)
                 {
                     foreach (var instruction in InvokeCoroutine(nextPort))
                     {
 #if ENABLE_UVS_PROFILING
-                            if (isMarkerOpen)
-                            {
-                                marker.End();
-                                isMarkerOpen = false;
-                            }
+                        if (isMarkerOpen)
+                        {
+                            marker.End();
+                            isMarkerOpen = false;
+                        }
 #endif
                         yield return instruction;
                     }
@@ -781,8 +773,7 @@ namespace Unity.VisualScripting
                 }
             }
 #endif
-
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
             AfterInvoke(recursionNode);
 #endif
         }
@@ -831,6 +822,8 @@ namespace Unity.VisualScripting
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void HandleException(Exception ex, IUnitPort from, IUnitPort to)
         {
+            if (to == null) return;
+
             var unit = to.unit;
             var stackTrace = ex.StackTrace;
 
@@ -886,7 +879,11 @@ namespace Unity.VisualScripting
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, ulong value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetValue(IUnitValuePort port, int value) => locals.Set(port, new ParameterValue(value));
+        public void SetValue(IUnitValuePort port, int value)
+        {
+            ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
+            existing = new ParameterValue(value);
+        }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, float value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -900,7 +897,6 @@ namespace Unity.VisualScripting
             if (exists && existing.UsesObjectID)
             {
                 existing.UpdateObject(value);
-
                 existing.SetTypeUnsafe(ParameterValue.ValueType.String);
                 return;
             }
@@ -935,7 +931,7 @@ namespace Unity.VisualScripting
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetValue(IUnitValuePort port, ParameterValue value)
+        public void SetValue(IUnitValuePort port, in ParameterValue value)
         {
             ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
 
@@ -978,22 +974,42 @@ namespace Unity.VisualScripting
                 // cachedValue should only ever be true if it was used in Flow.SetValue
                 if (!output.cachedValue || !locals.TryGetValue(output, out var value))
                 {
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
+                    RecursionNode recursionNode = new RecursionNode(output, stack);
+                    recursion?.Enter(recursionNode);
+#endif
                     try
                     {
+                        if (!output.supportsFetch)
+                        {
+                            throw new InvalidOperationException($"The value of '{output.key}' on '{output.unit}' cannot be fetched dynamically, it must be assigned.");
+                        }
+
                         value = output.getValue(this);
                         if (value.UsesObjectID) usedIDs.Add(value.objectID);
+
+                        // Supports cache will be true if ValueOutput.CacheResult is called
+                        if (output.supportsCache)
+                        {
+                            locals.Set(output, value);
+                        }
                     }
                     catch (Exception ex)
                     {
                         HandleException(ex, input, output);
                         throw;
                     }
+#if (UNITY_EDITOR && ENABLE_UVS_RECURSION_EDITOR) || (!UNITY_EDITOR && ENABLE_UVS_RECURSION_BUILD)
+                    finally
+                    {
+                        recursion?.Exit(recursionNode);
+                    }
+#endif
                 }
 
                 // Supports cache will be true if ValueOutput.CacheResult is called
                 if (output.supportsCache)
                 {
-                    locals.Set(output, value);
                     // We can set the value on the Input because the ValueOutput does not change
                     // while the flow is running and since only 1 ValueOutput can be connected it's the same
                     // as caching the output but now the value will be found with the first TryGetValue instead of the
@@ -1017,13 +1033,9 @@ namespace Unity.VisualScripting
 #endif
             }
 
-            if (input.hasDefaultValue)
+            if (TryGetDefaultValue(input, out var defaultValue))
             {
-                if (input.DefaultValue.IsNull() && input.nullMeansSelf)
-                {
-                    return Self;
-                }
-                return input.DefaultValue;
+                return defaultValue;
             }
 
             if (input.allowsNull) return default;
@@ -1098,19 +1110,52 @@ namespace Unity.VisualScripting
             return (T)FetchValue(input, typeof(T), reference);
         }
 
-        public bool TryGetDefaultValue(ValueInput input, out object defaultValue)
+        public bool TryGetDefaultValue(ValueInput input, out ParameterValue defaultValue)
         {
-            if (!input.unit.defaultValues.TryGetValue(input.key, out defaultValue))
+            if (!input.unit.defaultValues.TryGetValue(input.key, out var _defaultValue))
             {
+                defaultValue = ParameterValue.None;
                 return false;
             }
-
-            if (input.nullMeansSelf && defaultValue == null)
+            else
             {
-                defaultValue = _stack.self;
+                defaultValue = CreateDefaultValue(_defaultValue, out int id);
+                if (id != -1)
+                    usedIDs.Add(id);
+            }
+
+            if (input.nullMeansSelf && _defaultValue == null)
+            {
+                defaultValue = Self;
             }
 
             return true;
+        }
+
+        private ParameterValue CreateDefaultValue(object rawValue, out int id)
+        {
+            id = -1;
+            return rawValue switch
+            {
+                int i => new ParameterValue(i),
+                float f => new ParameterValue(f),
+                bool b => new ParameterValue(b),
+                double d => new ParameterValue(d),
+                long l => new ParameterValue(l),
+                uint ui => new ParameterValue(ui),
+                byte by => new ParameterValue(by),
+                short sh => new ParameterValue(sh),
+                ushort ush => new ParameterValue(ush),
+                ulong ul => new ParameterValue(ul),
+                sbyte sb => new ParameterValue(sb),
+                Vector3 v3 => new ParameterValue(v3),
+                Vector2 v2 => new ParameterValue(v2),
+                Vector4 v4 => new ParameterValue(v4),
+                Quaternion q => new ParameterValue(q),
+                Color c => new ParameterValue(c),
+                string s => new ParameterValue(s, out id),
+                _ => new ParameterValue(rawValue, out id)
+            };
         }
 
         #endregion
@@ -1157,10 +1202,13 @@ namespace Unity.VisualScripting
 
                 if (typeof(Component).IsAssignableFrom(input.type))
                 {
-                    defaultValue = defaultValue?.ConvertTo(input.type);
+                    if (!defaultValue.IsNull())
+                    {
+                        defaultValue.UpdateObject(defaultValue.ConvertTo(input.type));
+                    }
                 }
 
-                if (!input.allowsNull && defaultValue == null)
+                if (!input.allowsNull && defaultValue.IsNull())
                 {
                     return false;
                 }
@@ -1319,3 +1367,4 @@ namespace Unity.VisualScripting
         #endregion
     }
 }
+#pragma warning restore UAC0009 // DEVELOPMENT_BUILD usage

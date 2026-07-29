@@ -49,6 +49,11 @@ namespace Unity.VisualScripting
 
         [Serialize]
         public SerializableType typeHandle { get; set; }
+
+#if UNITY_EDITOR
+        [Serialize]
+        public bool isOpen { get; set; }
+#endif
     }
 
     public static class BoxMutator

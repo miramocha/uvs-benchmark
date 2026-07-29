@@ -380,6 +380,8 @@ namespace Unity.VisualScripting
             typeof(string),
             typeof(Vector2),
             typeof(Vector3),
+            typeof(Vector2Int),
+            typeof(Vector3Int),
             typeof(Vector4),
             typeof(Quaternion),
             typeof(Matrix4x4),

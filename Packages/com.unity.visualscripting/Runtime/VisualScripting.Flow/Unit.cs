@@ -50,11 +50,6 @@ namespace Unity.VisualScripting
         {
             base.BeforeRemove();
 
-            foreach (var valueInput in valueInputs)
-            {
-                valueInput?.Dispose();
-            }
-
             Disconnect();
         }
 
@@ -120,10 +115,6 @@ namespace Unity.VisualScripting
             defaultValues.Clear();
             controlInputs.Clear();
             controlOutputs.Clear();
-            foreach (var valueInput in valueInputs)
-            {
-                valueInput?.Dispose();
-            }
             valueInputs.Clear();
             valueOutputs.Clear();
             invalidInputs.Clear();

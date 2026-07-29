@@ -7,5 +7,7 @@ namespace Unity.VisualScripting
         Type type { get; }
 
         void CacheValue();
+
+        uint Hash { get; }
     }
 }

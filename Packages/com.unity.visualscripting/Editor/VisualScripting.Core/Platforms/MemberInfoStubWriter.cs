@@ -1,3 +1,4 @@
+using System;
 using System.Reflection;
 
 namespace Unity.VisualScripting
@@ -12,6 +13,8 @@ namespace Unity.VisualScripting
 
         public new T stub { get; }
         protected Member manipulator { get; }
+
+        public override bool skip =>  stub.IsDefined(typeof(ObsoleteAttribute), true) && stub.GetAttribute<ObsoleteAttribute>(true).IsError;
 
         public override string stubMethodComment => stub.ReflectedType.CSharpFullName() + "." + stub.Name;
 

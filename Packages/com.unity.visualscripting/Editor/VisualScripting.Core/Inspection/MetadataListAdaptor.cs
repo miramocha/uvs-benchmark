@@ -334,9 +334,7 @@ namespace Unity.VisualScripting
             if (looseAssembly == null) // Can be null when we're adding new items to the list (the last entry is empty)
                 return;
 
-            bool shouldShowWarning =
-                !looseAssembly.StartsWith("Unity.VisualScripting.", StringComparison.Ordinal) &&
-                _cachedEditorAssemblyNames.Contains(looseAssembly);
+            bool shouldShowWarning = _cachedEditorAssemblyNames.Contains(looseAssembly);
 
             if (shouldShowWarning)
             {

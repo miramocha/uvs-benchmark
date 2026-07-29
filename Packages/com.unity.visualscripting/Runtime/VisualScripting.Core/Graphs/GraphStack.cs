@@ -62,7 +62,10 @@ namespace Unity.VisualScripting
         void IPoolable.Free()
         {
             root = null;
-            Array.Clear(frames, 0, frames.Length);
+            for (int i = 0; i < frames.Length; i++)
+            {
+                frames[i] = default;
+            }
             version = -1;
             depth = 1;
         }

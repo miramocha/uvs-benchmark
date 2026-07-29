@@ -46,7 +46,7 @@ namespace Unity.VisualScripting
         }
 
         //TODO: remove once the asset bundle bug is fixed
-        internal bool IsValid()
+        public bool IsValid()
         {
             foreach (Texture2D texture2D in personal.Values)
             {

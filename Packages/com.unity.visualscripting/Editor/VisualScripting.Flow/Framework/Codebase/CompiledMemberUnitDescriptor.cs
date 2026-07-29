@@ -12,7 +12,7 @@ namespace Unity.VisualScripting
         {
         }
 
-        protected string name => unit.Name;
+        protected string name => unit.CSharpName;
 
         protected string summary => unit.Summary;
 
@@ -22,7 +22,16 @@ namespace Unity.VisualScripting
 
         private string Name(bool @short)
         {
-            var name = this.name;
+            string name;
+
+            if (BoltCore.Configuration.humanNaming)
+            {
+                name = unit.HumanName;
+            }
+            else
+            {
+                name = unit.CSharpName;
+            }
 
             if (direction == ActionDirection.Get) name += " (get)";
             else if (direction == ActionDirection.Set) name += " (set)";
@@ -100,10 +109,8 @@ namespace Unity.VisualScripting
         {
             get
             {
-                if (_eventIcon == null)
+                if (_eventIcon == null || !_eventIcon.IsValid())
                 {
-                    _eventIcon = null;
-
                     Texture2D originalTex = typeof(BoltUnityEvent).Icon()?[IconSize.Small];
 
                     if (originalTex == null)

@@ -487,7 +487,7 @@ namespace Unity.VisualScripting
 
             var parentElement = (IGraphParentElement)element;
 
-            return TryEnterParentElement(parentElement, out error, maxRecursionDepth);
+            return TryEnterParentElement(parentElement, out error, maxRecursionDepth, true);
         }
 
         protected bool TryEnterParentElement(IGraphParentElement parentElement, out string error, int maxRecursionDepth = -1, bool skipContainsCheck = false)

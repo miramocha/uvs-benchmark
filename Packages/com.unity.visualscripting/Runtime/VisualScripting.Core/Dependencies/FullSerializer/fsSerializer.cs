@@ -366,7 +366,7 @@ namespace Unity.VisualScripting.FullSerializer
                 }
             }
 
-            result = fsResult.Fail("Internal error -- could not find a converter for " + type);
+            result = fsResult.Warn("Internal error -- could not find a converter for " + type);
             return null;
         }
 
@@ -479,13 +479,8 @@ namespace Unity.VisualScripting.FullSerializer
 
                 // This type does not need cycle support.
                 var converter = GetConverter(instance.GetType(), overrideConverterType, out var converterResult);
-                if (converterResult.Failed)
-                {
-                    data = new fsData();
-                    return converterResult;
-                }
 
-                if (converter.RequestCycleSupport(instance.GetType()) == false)
+                if (converter?.RequestCycleSupport(instance.GetType()) == false)
                 {
                     return InternalSerialize_2_Inheritance(storageType, overrideConverterType, instance, out data);
                 }
@@ -514,14 +509,10 @@ namespace Unity.VisualScripting.FullSerializer
                 // actual object. InternalSerialize will handle inheritance
                 // correctly for us.
                 var result = InternalSerialize_2_Inheritance(storageType, overrideConverterType, instance, out data);
-                if (converterResult.Failed)
-                {
-                    return converterResult;
-                }
 
                 _lazyReferenceWriter.WriteDefinition(_references.GetReferenceId(instance), data);
 
-                return converterResult;
+                return fsResult.Success;
             }
             finally
             {
@@ -553,8 +544,7 @@ namespace Unity.VisualScripting.FullSerializer
                 //       information.
 
                 if (storageType != instance.GetType() &&
-                    GetConverter(storageType, overrideConverterType, out fsResult result)?.RequestInheritanceSupport(storageType) == true &&
-                    result.Succeeded)
+                    GetConverter(storageType, overrideConverterType, out fsResult result)?.RequestInheritanceSupport(storageType) == true)
                 {
                     var instanceType = instance.GetType();
 
@@ -625,10 +615,6 @@ namespace Unity.VisualScripting.FullSerializer
                     // Serialize the actual object content; we'll just wrap it with
                     // versioning metadata here.
                     var result = InternalSerialize_4_Converter(overrideConverterType, instance, out data);
-                    if (result.Failed)
-                    {
-                        return result;
-                    }
 
                     // Add the versioning information
                     EnsureDictionary(data);
@@ -644,7 +630,7 @@ namespace Unity.VisualScripting.FullSerializer
             catch (Exception ex)
             {
                 data = new fsData();
-                return fsResult.Fail($"FullSerializer Internal Error -- Error trying to serialize: {instance.GetType()?.CSharpFullName() ?? "null"}\n{ex}");
+                return fsResult.Warn($"FullSerializer Internal Error -- Error trying to serialize: {instance.GetType()?.CSharpFullName() ?? "null"}\n{ex}");
             }
         }
 
@@ -657,7 +643,7 @@ namespace Unity.VisualScripting.FullSerializer
             if (result.Failed)
             {
                 data = new fsData();
-                return result;
+                return fsResult.Warn($"No converter for: {instance}");
             }
 
             return converter.TrySerialize(instance, out data, instanceType);
@@ -752,10 +738,19 @@ namespace Unity.VisualScripting.FullSerializer
             // it.
             if (IsObjectReference(data))
             {
-                var refId = int.Parse(data.AsDictionary[Key_ObjectReference].AsString);
-                result = _references.GetReferenceObject(refId);
-                processors = GetProcessors(result.GetType());
-                return fsResult.Success;
+                try
+                {
+                    var refId = int.Parse(data.AsDictionary[Key_ObjectReference].AsString);
+                    result = _references.GetReferenceObject(refId);
+                    processors = GetProcessors(result.GetType());
+                    return fsResult.Success;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    result = null;
+                    processors = GetProcessors(storageType);
+                    return fsResult.Fail(ex.ToString());
+                }
             }
 
             return InternalDeserialize_2_Version(overrideConverterType, data, storageType, ref result, out processors);
@@ -785,10 +780,6 @@ namespace Unity.VisualScripting.FullSerializer
 
                     // deserialize as the original type
                     deserializeResult += InternalDeserialize_3_Inheritance(overrideConverterType, data, path[0].ModelType, ref result, out processors);
-                    if (deserializeResult.Failed)
-                    {
-                        return deserializeResult;
-                    }
 
                     // TODO: we probably should be invoking object processors all
                     //       along this pipeline
@@ -838,11 +829,6 @@ namespace Unity.VisualScripting.FullSerializer
             // deserialization.
             processors = GetProcessors(objectType);
 
-            if (deserializeResult.Failed)
-            {
-                return deserializeResult;
-            }
-
             // LAZLO / LUDIQ FIX
             try
             {
@@ -851,7 +837,6 @@ namespace Unity.VisualScripting.FullSerializer
             catch (Exception ex)
             {
                 deserializeResult += fsResult.Fail($"FullSerializer Internal Error -- Error trying to deserialize: {storageType.CSharpFullName()}\n" + ex);
-                return deserializeResult;
             }
 
             // Construct an object instance if we don't have one already. We also
@@ -862,7 +847,7 @@ namespace Unity.VisualScripting.FullSerializer
                 // If GetConverter is null, result will safely be assigned null
                 result = GetConverter(objectType, overrideConverterType, out var fsResult)?.CreateInstance(data, objectType);
 
-                if (fsResult.Failed) return fsResult;
+                deserializeResult += fsResult;
             }
 
             // We call OnBeforeDeserializeAfterInstanceCreation here because we
@@ -875,7 +860,6 @@ namespace Unity.VisualScripting.FullSerializer
             catch (Exception ex)
             {
                 deserializeResult += fsResult.Fail($"FullSerializer Internal Error -- Error trying to deserialize: {storageType.CSharpFullName()}\n" + ex);
-                return deserializeResult;
             }
 
             try
@@ -1049,7 +1033,7 @@ namespace Unity.VisualScripting.FullSerializer
             }
             catch (Exception ex)
             {
-                deserializeResult += fsResult.Fail(ex.ToString());
+                deserializeResult += fsResult.Warn(ex.ToString());
                 return objectType;
             }
         }

@@ -6,6 +6,7 @@ using System.Linq;
 using Unity.VisualScripting;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Assemblies;
 
 public class FlowGraphUnitUISample : RuntimeFlowGraph
 {
@@ -19,9 +20,11 @@ public class FlowGraphUnitUISample : RuntimeFlowGraph
     private void CreateGraphUISample()
     {
         CreateGraph();
-
+#if UNITY_6000_5_OR_NEWER
+        IEnumerable<Type> GetEventUnitTypes() => CurrentAssemblies.GetLoadedAssemblies().SelectMany(a => a.GetTypes().Where(t => typeof(IUnit).IsAssignableFrom(t))).Where(t => t.IsClass && !t.IsAbstract);
+#else
         IEnumerable<Type> GetEventUnitTypes() => AppDomain.CurrentDomain.GetAssemblies().SelectMany(a => a.GetTypes().Where(t => typeof(IUnit).IsAssignableFrom(t))).Where(t => t.IsClass && !t.IsAbstract);
-
+#endif
         Vector2 position = Vector2.zero;
 
         int index = 0;

@@ -38,6 +38,11 @@
             "name": "com.unity.modules.physics2d",
             "expression": "1.0.0",
             "define": "MODULE_PHYSICS_2D_EXISTS"
+        },
+        {
+            "name": "com.unity.collections",
+            "expression": "1.0.0",
+            "define": "MODULE_COLLECTIONS_EXISTS"
         }
     ],
     "noEngineReferences": false

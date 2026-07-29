@@ -264,7 +264,7 @@ namespace Unity.VisualScripting
 
         #region Lifecycle
 
-        private readonly FrameLimiterUtility _frameLimiter = new FrameLimiterUtility(60);
+        private readonly FrameLimiterUtility _frameLimiter = new FrameLimiterUtility(24);
 
         private void _OnSelectionChange()
         {

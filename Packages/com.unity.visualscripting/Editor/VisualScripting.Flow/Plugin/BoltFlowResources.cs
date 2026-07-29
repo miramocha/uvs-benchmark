@@ -13,12 +13,13 @@ namespace Unity.VisualScripting
 
         public Icons icons { get; private set; }
 
-
         public override void LateInitialize()
         {
             base.LateInitialize();
 
             icons.Load();
+
+            VariableDeclarationInspector.NullIcon = typeof(Null).Icon() ?? BoltCore.Icons.@null;
         }
 
         public class Icons

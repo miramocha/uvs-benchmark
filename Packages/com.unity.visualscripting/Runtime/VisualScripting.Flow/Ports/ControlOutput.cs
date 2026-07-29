@@ -70,6 +70,9 @@ namespace Unity.VisualScripting
         [DoNotSerialize]
         internal ControlInput connectedControlInput;
 
+        [DoNotSerialize]
+        public ControlInput ConnectedControlInput => connectedControlInput;
+
         public override bool hasValidConnection => connection != null;
 
         public override bool CanConnectToValid(ControlInput port)

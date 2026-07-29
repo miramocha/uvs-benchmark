@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Unity.VisualScripting
@@ -67,7 +66,7 @@ namespace Unity.VisualScripting
                 }
                 else
                 {
-                    flow.SetValue(argumentPorts[i], argValue);
+                    flow.SetValue(argumentPorts[i], in argValue);
                 }
             }
         }

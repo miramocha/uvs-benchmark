@@ -50,28 +50,50 @@ namespace Unity.VisualScripting
 
         public override ParameterValue GetValueRef(ref ParameterValue target)
         {
+            if (target.IsBoxed)
+            {
+                ref TTarget t = ref target.TryUnbox<TTarget>(out var canUnbox);
+                if (canUnbox)
+                {
+                    return ParameterValue.Create(getter(ref t));
+                }
+            }
+
             TTarget tempTarget = target.Cast<TTarget>();
             TProperty result = getter(ref tempTarget);
+            target = ParameterValue.Create(tempTarget);
             return ParameterValue.Create(result);
         }
 
         public override void SetValueRef(ref ParameterValue target, ParameterValue value)
         {
+            var propertyValue = value.Cast<TProperty>();
             if (target.IsBoxed)
             {
-                ref TTarget boxedTarget = ref target.Unbox<TTarget>();
-                setter(ref boxedTarget, value.Cast<TProperty>());
+                ref TTarget t = ref target.TryUnbox<TTarget>(out var canUnbox);
+                if (canUnbox)
+                {
+                    setter(ref t, propertyValue);
+                    return;
+                }
             }
-            else
-            {
-                TTarget tempTarget = target.Cast<TTarget>();
-                setter(ref tempTarget, value.Cast<TProperty>());
-                target = ParameterValue.Create(tempTarget);
-            }
+
+            TTarget tempTarget = target.Cast<TTarget>();
+            setter(ref tempTarget, value.Cast<TProperty>());
+            target = ParameterValue.Create(tempTarget);
         }
 
         public override ParameterValue GetValue(ParameterValue target)
         {
+            if (target.IsBoxed)
+            {
+                ref TTarget t = ref target.TryUnbox<TTarget>(out var canUnbox);
+                if (canUnbox)
+                {
+                    return ParameterValue.Create(getter(ref t));
+                }
+            }
+
             TTarget tempTarget = target.Cast<TTarget>();
             TProperty result = getter(ref tempTarget);
             return ParameterValue.Create(result);
@@ -88,14 +110,23 @@ namespace Unity.VisualScripting
 
         public override object GetValue(object target)
         {
-            ref TTarget _target = ref Unsafe.Unbox<TTarget>(target);
-            return getter(ref _target);
+            if (target is TTarget)
+            {
+                return getter(ref Unsafe.Unbox<TTarget>(target));
+            }
+
+            throw new InvalidCastException();
         }
 
         public override void SetValue(object target, object value)
         {
-            ref TTarget _target = ref Unsafe.Unbox<TTarget>(target);
-            setter(ref _target, (TProperty)value);
+            if (target is TTarget)
+            {
+                setter(ref Unsafe.Unbox<TTarget>(target), (TProperty)value);
+                return;
+            }
+
+            throw new InvalidCastException();
         }
         #endregion
     }

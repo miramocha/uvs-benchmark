@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Unity.VisualScripting
 {
@@ -31,6 +32,9 @@ namespace Unity.VisualScripting
         // https://support.ludiq.io/communities/5/topics/1661-x
         public override bool canDefine => type != null;
 
+        [DoNotSerialize]
+        private OptimizedStructDefaultConstructorInvokerBase invoker;
+
         /// <summary>
         /// The entry point to create the struct. You can
         /// still get the return value without connecting this port.
@@ -62,16 +66,39 @@ namespace Unity.VisualScripting
             Succession(enter, exit);
         }
 
+        public override void Prewarm()
+        {
+            invoker = type.Prewarm();
+        }
+
         private ControlOutput Enter(Flow flow)
         {
-            flow.SetValue(output, Activator.CreateInstance(type));
-
+            if (invoker != null)
+            {
+                flow.SetValue(output, invoker.InvokeValue());
+            }
+            else
+            {
+                flow.SetValue(output, Activator.CreateInstance(type));
+            }
             return exit;
         }
 
-        private object Create(Flow flow)
+        private ParameterValue Create(Flow flow)
         {
-            return Activator.CreateInstance(type);
+            if (invoker != null)
+            {
+                return invoker.InvokeValue();
+            }
+            else
+            {
+                return new ParameterValue(Activator.CreateInstance(type));
+            }
+        }
+
+        public override IEnumerable<object> GetAotStubs(HashSet<object> visited)
+        {
+            yield return type;
         }
     }
 }

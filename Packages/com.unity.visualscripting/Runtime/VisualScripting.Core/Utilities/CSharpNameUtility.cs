@@ -77,9 +77,26 @@ namespace Unity.VisualScripting
 
         public static string CSharpName(this MemberInfo member, ActionDirection direction)
         {
-            if (member is MethodInfo && ((MethodInfo)member).IsOperator())
+            if (member is MethodInfo methodInfo)
             {
-                return operators[member.Name] + " operator";
+                var parameters = methodInfo.GetParameters();
+
+                if (methodInfo.IsOperator())
+                {
+                    if (parameters.Length == 2)
+                    {
+                        return $"{parameters[0].ParameterType.CSharpName()} {operators[member.Name]} {parameters[1].ParameterType.CSharpName()}";
+                    }
+
+                    return $"{operators[member.Name]}{parameters[0].ParameterType.CSharpName()}";
+                }
+                else if (methodInfo.IsUserDefinedConversion())
+                {
+                    string toType = methodInfo.ReturnType.CSharpName();
+                    string fromType = parameters[0].ParameterType.CSharpName();
+
+                    return $"({toType}){fromType}";
+                }
             }
 
             if (member is ConstructorInfo)
@@ -97,9 +114,26 @@ namespace Unity.VisualScripting
 
         public static string CSharpTypeName(this MemberInfo member, ActionDirection direction)
         {
-            if (member is MethodInfo && ((MethodInfo)member).IsOperator())
+            if (member is MethodInfo methodInfo)
             {
-                return member.DeclaringType.CSharpName() + "." + operators[member.Name] + " operator";
+                var parameters = methodInfo.GetParameters();
+
+                if (methodInfo.IsOperator())
+                {
+                    if (parameters.Length == 2)
+                    {
+                        return $"{parameters[0].ParameterType.CSharpName()} {operators[member.Name]} {parameters[1].ParameterType.CSharpName()}";
+                    }
+
+                    return member.DeclaringType.CSharpName() + $" {operators[member.Name]}{parameters[0].ParameterType.CSharpName()}";
+                }
+                else if (methodInfo.IsUserDefinedConversion())
+                {
+                    string toType = methodInfo.ReturnType.CSharpName();
+                    string fromType = parameters[0].ParameterType.CSharpName();
+
+                    return member.DeclaringType.CSharpName() + $" ({toType}){fromType}";
+                }
             }
 
             if (member is ConstructorInfo)
