@@ -28,6 +28,7 @@ namespace Unity.VisualScripting
             propertyAccessors = new Dictionary<PropertyInfo, OptimizedAccessorBase>();
             methodInvokers = new Dictionary<MethodInfo, OptimizedInvokerBase>();
             constructorInvokers = new Dictionary<ConstructorInfo, OptimizedConstructorInvokerBase>();
+            structDefaultConstructorInvokers = new Dictionary<Type, OptimizedStructDefaultConstructorInvokerBase>();
 
             jitAvailable = PlatformUtility.supportsJit;
         }
@@ -36,6 +37,7 @@ namespace Unity.VisualScripting
         private static readonly Dictionary<PropertyInfo, OptimizedAccessorBase> propertyAccessors;
         private static readonly Dictionary<MethodInfo, OptimizedInvokerBase> methodInvokers;
         private static readonly Dictionary<ConstructorInfo, OptimizedConstructorInvokerBase> constructorInvokers;
+        private static readonly Dictionary<Type, OptimizedStructDefaultConstructorInvokerBase> structDefaultConstructorInvokers;
 
         public static readonly bool jitAvailable;
 
@@ -69,6 +71,7 @@ namespace Unity.VisualScripting
             propertyAccessors.Clear();
             methodInvokers.Clear();
             constructorInvokers.Clear();
+            structDefaultConstructorInvokers.Clear();
         }
 
         internal static void VerifyStaticTarget(Type targetType, object target)
@@ -282,6 +285,13 @@ namespace Unity.VisualScripting
 
         #region Methods
 
+        public static OptimizedStructDefaultConstructorInvokerBase Prewarm(this Type type)
+        {
+            if (!type.IsStruct())
+                throw new InvalidOperationException($"Cannot create a DefaultStructConstructorInvoker for {type.CSharpFullName()}.");
+            return GetConstructorInvoker(type);
+        }
+
         public static OptimizedConstructorInvokerBase Prewarm(this ConstructorInfo constructorInfo)
         {
             return GetConstructorInvoker(constructorInfo);
@@ -373,6 +383,89 @@ namespace Unity.VisualScripting
         public static ParameterValue InvokeOptimized(this MethodInfo methodInfo, ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
         {
             return GetMethodInvoker(methodInfo).Invoke(target, arg0, arg1, arg2, arg3, arg4);
+        }
+
+        public static object InvokeOptimized(this ConstructorInfo constructorInfo, object target)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target);
+        }
+
+        /// <summary>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
+        /// once done with the value.
+        /// </summary>
+        public static ParameterValue InvokeOptimized(this ConstructorInfo constructorInfo, ParameterValue target)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target);
+        }
+
+        public static object InvokeOptimized(this ConstructorInfo constructorInfo, object target, object arg0)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0);
+        }
+
+        /// <summary>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
+        /// once done with the value.
+        /// </summary>
+        public static ParameterValue InvokeOptimized(this ConstructorInfo constructorInfo, ParameterValue target, ParameterValue arg0)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0);
+        }
+
+        public static object InvokeOptimized(this ConstructorInfo constructorInfo, object target, object arg0, object arg1)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0, arg1);
+        }
+
+        /// <summary>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
+        /// </summary>
+        public static ParameterValue InvokeOptimized(this ConstructorInfo constructorInfo, ParameterValue target, ParameterValue arg0, ParameterValue arg1)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0, arg1);
+        }
+
+        public static object InvokeOptimized(this ConstructorInfo constructorInfo, object target, object arg0, object arg1, object arg2)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0, arg1, arg2);
+        }
+
+        /// <summary>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
+        /// once done with the value.
+        /// </summary>
+        public static ParameterValue InvokeOptimized(this ConstructorInfo constructorInfo, ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0, arg1, arg2);
+        }
+
+        public static object InvokeOptimized(this ConstructorInfo constructorInfo, object target, object arg0, object arg1, object arg2, object arg3)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0, arg1, arg2, arg3);
+        }
+
+        /// <summary>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
+        /// once done with the value.
+        /// </summary>
+        public static ParameterValue InvokeOptimized(this ConstructorInfo constructorInfo, ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0, arg1, arg2, arg3);
+        }
+
+        public static object InvokeOptimized(this ConstructorInfo constructorInfo, object target, object arg0, object arg1, object arg2, object arg3, object arg4)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0, arg1, arg2, arg3, arg4);
+        }
+
+        /// <summary>
+        /// If using a object value you should manually free the indexes using <see cref="ParameterValue.FreeObject(int)"/>
+        /// once done with the value.
+        /// </summary>
+        public static ParameterValue InvokeOptimized(this ConstructorInfo constructorInfo, ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4)
+        {
+            return GetConstructorInvoker(constructorInfo).Invoke(target, arg0, arg1, arg2, arg3, arg4);
         }
 
         public static bool SupportsOptimization(this MethodInfo methodInfo, out DelegateCompatiblity delegateCompatible)
@@ -700,6 +793,28 @@ namespace Unity.VisualScripting
                     invoker.Compile();
 
                     constructorInvokers.Add(constructorInfo, invoker);
+                }
+
+                return invoker;
+            }
+        }
+
+        private static OptimizedStructDefaultConstructorInvokerBase GetConstructorInvoker(Type type)
+        {
+            Ensure.That(nameof(type)).IsNotNull(type);
+
+            lock (structDefaultConstructorInvokers)
+            {
+                if (!structDefaultConstructorInvokers.TryGetValue(type, out var invoker))
+                {
+
+                    Type invokerType;
+
+                    invokerType = typeof(OptimizedStructDefaultConstructorInvoker<>).MakeGenericType(type);
+
+                    invoker = (OptimizedStructDefaultConstructorInvokerBase)Activator.CreateInstance(invokerType);
+
+                    structDefaultConstructorInvokers.Add(type, invoker);
                 }
 
                 return invoker;

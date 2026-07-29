@@ -1,11 +1,18 @@
 using System;
-using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using UnityEngine;
 
 namespace Unity.VisualScripting
 {
+    public struct MixedStruct
+    {
+        public int A;
+        public string B;
+        public Vector3 C;
+        public object D;
+    }
+
     public sealed class StructInstanceActionInvoker<TTarget, TParam0> : OptimizedInvokerBase where TTarget : struct
     {
         public StructInstanceActionInvoker(MethodInfo methodInfo) : base(methodInfo) { }
@@ -14,18 +21,27 @@ namespace Unity.VisualScripting
 
         public override object Invoke(object target, params object[] args)
         {
-            ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
-            invoke(ref tempTarget, (TParam0)args[0]);
-            return null;
+            if (target is TTarget)
+            {
+                ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
+                invoke(ref tempTarget, (TParam0)args[0]);
+                return null;
+            }
+
+            throw new InvalidCastException();
         }
 
-        public override object Invoke(object target, object arg0)
+        public override object Invoke(object target, object arg0, object arg1)
         {
-            ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
-            invoke(ref tempTarget, (TParam0)arg0);
-            return null;
-        }
+            if (target is TTarget)
+            {
+                ref TTarget tempTarget = ref Unsafe.Unbox<TTarget>(target);
+                invoke(ref tempTarget, (TParam0)arg0);
+                return null;
+            }
 
+            throw new InvalidCastException();
+        }
         public override ParameterValue Invoke(ParameterValue target, Span<ParameterValue> args)
         {
             throw new InvalidOperationException("Instance member on struct requires ref target.");
@@ -38,18 +54,23 @@ namespace Unity.VisualScripting
 
         public override ParameterValue InvokeRef(ref ParameterValue target, ParameterValue arg0)
         {
-            // This should handle: Variables, Literals and Port DefaultValues
+            var a0 = arg0.Cast<TParam0>();
+
+            // This should handle: Variables and Literals.
+            // since this is visual scripting's normal functionality
             if (target.IsBoxed)
             {
-                if (target.ObjectValue is TTarget)
+                ref TTarget t = ref target.TryUnbox<TTarget>(out var canUnbox);
+                if (canUnbox)
                 {
-                    invoke(ref target.Unbox<TTarget>(), arg0.Cast<TParam0>());
+                    invoke(ref t, a0);
                     return ParameterValue.None;
                 }
-                else if (target.IsBoxedNumeric)
+
+                if (target.IsBoxedNumeric)
                 {
                     TTarget converted = target.AsNumeric<TTarget>();
-                    invoke(ref converted, arg0.Cast<TParam0>());
+                    invoke(ref converted, a0);
                     return ParameterValue.None;
                 }
             }
@@ -57,7 +78,7 @@ namespace Unity.VisualScripting
             // Allow conversion this will remove the reference but works the same as Normal Visual Scripting.
 
             TTarget tempTarget = target.Cast<TTarget>();
-            invoke(ref tempTarget, arg0.Cast<TParam0>());
+            invoke(ref tempTarget, a0);
             target = ParameterValue.Create(tempTarget);
 
             return ParameterValue.None;

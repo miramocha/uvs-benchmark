@@ -250,11 +250,30 @@ namespace Unity.VisualScripting
         {
             var words = member.Name.Prettify();
 
-            if (member is MethodInfo)
+            if (member is MethodInfo methodInfo)
             {
-                if (((MethodInfo)member).IsOperator())
+                if (methodInfo.IsOperator())
                 {
-                    return humanOperatorNames[member.Name];
+                    var parameters = methodInfo.GetParameters();
+                    string operatorName = humanOperatorNames[member.Name];
+
+                    if (parameters.Length == 2)
+                    {
+                        return $"{parameters[0].ParameterType.HumanName()} {operatorName} {parameters[1].ParameterType.HumanName()}";
+                    }
+                    else if (parameters.Length == 1)
+                    {
+                        return $"{operatorName} {parameters[0].ParameterType.HumanName()}";
+                    }
+
+                    return operatorName;
+                }
+                else if (methodInfo.IsUserDefinedConversion())
+                {
+                    string fromType = methodInfo.GetParameters()[0].ParameterType.HumanName();
+                    string toType = methodInfo.ReturnType.HumanName();
+
+                    return $"{fromType} To {toType}";
                 }
                 else
                 {

@@ -2,9 +2,7 @@ using System;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Unity.Collections.LowLevel.Unsafe;
-using UnityEngine;
 
 namespace Unity.VisualScripting
 {
@@ -55,9 +53,10 @@ namespace Unity.VisualScripting
             }
             else
             {
+#if MODULE_COLLECTIONS_EXISTS
                 fieldOffset = UnsafeUtility.GetFieldOffset(fieldInfo);
-                useDirectUnsafeMapping = UnsafeUtility.IsBlittable(typeof(TTarget)) && UnsafeUtility.IsBlittable(typeof(TField));
-
+                useDirectUnsafeMapping = !RuntimeHelpers.IsReferenceOrContainsReferences<TField>();
+#endif
                 getter = ReflectionGetter;
 
                 if (fieldInfo.CanWrite())
@@ -66,73 +65,103 @@ namespace Unity.VisualScripting
                 }
             }
         }
+
+#if MODULE_COLLECTIONS_EXISTS
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private TField ReflectionGetter(ref TTarget target)
         {
+            ref byte baseRef = ref Unsafe.As<TTarget, byte>(ref target);
+            ref byte fieldRef = ref Unsafe.Add(ref baseRef, fieldOffset);
+
             if (useDirectUnsafeMapping)
             {
-                return Unsafe.ReadUnaligned<TField>(ref Unsafe.Add(ref Unsafe.As<TTarget, byte>(ref target), fieldOffset));
+                return Unsafe.ReadUnaligned<TField>(ref fieldRef);
             }
 
-            object boxed = target;
-            return (TField)fieldInfo.GetValue(boxed);
+            return Unsafe.As<byte, TField>(ref fieldRef);
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ReflectionSetter(ref TTarget target, TField value)
         {
+            ref byte baseRef = ref Unsafe.As<TTarget, byte>(ref target);
+            ref byte fieldRef = ref Unsafe.Add(ref baseRef, fieldOffset);
+
             if (useDirectUnsafeMapping)
             {
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.As<TTarget, byte>(ref target), fieldOffset), value);
+                Unsafe.WriteUnaligned(ref fieldRef, value);
+                return;
             }
-            else
-            {
-                object boxed = target;
-                fieldInfo.SetValue(boxed, value);
-                target = (TTarget)boxed;
-            }
+
+            ref TField field = ref Unsafe.As<byte, TField>(ref fieldRef);
+            field = value;
         }
+#else
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private TField ReflectionGetter(ref TTarget target)
+        {
+            return (TField)fieldInfo.GetValue(target);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ReflectionSetter(ref TTarget target, TField value)
+        {
+            fieldInfo.SetValue(target, value);
+        }
+#endif
         #region Value Execution
 
         public override ParameterValue GetValue(ParameterValue target)
         {
+            if (target.IsBoxed)
+            {
+                ref TTarget t = ref target.TryUnbox<TTarget>(out var canUnbox);
+                if (canUnbox)
+                {
+                    return ParameterValue.Create(getter(ref t));
+                }
+            }
+
             TTarget tempTarget = target.Cast<TTarget>();
-            TField result = getter(ref tempTarget);
-            return ParameterValue.Create(result);
+            return ParameterValue.Create(getter(ref tempTarget));
         }
 
         public override ParameterValue GetValueRef(ref ParameterValue target)
         {
+            if (target.IsBoxed)
+            {
+                ref TTarget t = ref target.TryUnbox<TTarget>(out var canUnbox);
+                if (canUnbox)
+                {
+                    return ParameterValue.Create(getter(ref t));
+                }
+            }
+
             TTarget tempTarget = target.Cast<TTarget>();
-            TField result = getter(ref tempTarget);
-            return ParameterValue.Create(result);
+            return ParameterValue.Create(getter(ref tempTarget));
         }
 
         public override void SetValueRef(ref ParameterValue target, ParameterValue value)
         {
-            if (fieldInfo.IsInitOnly)
-            {
-                throw new FieldAccessException($"The field '{typeof(TTarget)}.{fieldInfo.Name}' is readonly.");
-            }
-
-            if (OptimizedReflection.safeMode)
-            {
-                if (target.GetValueType() != typeof(TTarget))
-                    throw new ArgumentException("Target type mismatch. When setting a value on a struct the target must match the struct type.", nameof(target));
-            }
+            var fieldValue = value.Cast<TField>();
 
             if (target.IsBoxed)
             {
-                setter(ref target.Unbox<TTarget>(), value.Cast<TField>());
+                ref TTarget t = ref target.TryUnbox<TTarget>(out var canUnbox);
+                if (canUnbox)
+                {
+                    setter(ref t, fieldValue);
+                    return;
+                }
             }
-            else
-            {
-                TTarget tempTarget = target.Cast<TTarget>();
-                setter(ref tempTarget, value.Cast<TField>());
-                target = ParameterValue.Create(tempTarget);
-            }
+
+            TTarget tempTarget = target.Cast<TTarget>();
+            setter(ref tempTarget, fieldValue);
+            target = ParameterValue.Create(tempTarget);
         }
 
         public override void SetValue(ParameterValue target, ParameterValue value)
-        => throw new NotSupportedException("StructInstanceFieldAccessor requires a ref target to persist changes. Use the ref ParameterValue overload.");
+            => throw new NotSupportedException("StructInstanceFieldAccessor requires a ref target to persist changes. Use the ref ParameterValue overload.");
 
         #endregion
 
@@ -140,14 +169,24 @@ namespace Unity.VisualScripting
 
         public override object GetValue(object target)
         {
-            return getter(ref Unsafe.Unbox<TTarget>(target));
+            if (target is TTarget)
+            {
+                return getter(ref Unsafe.Unbox<TTarget>(target));
+            }
+
+            throw new InvalidCastException();
         }
 
         public override void SetValue(object target, object value)
         {
-            setter(ref Unsafe.Unbox<TTarget>(target), (TField)value);
-        }
+            if (target is TTarget)
+            {
+                setter(ref Unsafe.Unbox<TTarget>(target), (TField)value);
+                return;
+            }
 
+            throw new InvalidCastException();
+        }
         #endregion
     }
 }

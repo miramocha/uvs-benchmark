@@ -3,8 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using UnityEngine;
+using UnityEngine.Scripting;
 using UnityObject = UnityEngine.Object;
 
 namespace Unity.VisualScripting
@@ -137,12 +137,15 @@ namespace Unity.VisualScripting
         private bool _isInvokedAsExtension;
 
         [DoNotSerialize]
+
         private OptimizedAccessorBase fieldAccessor;
 
         [DoNotSerialize]
+
         private OptimizedAccessorBase propertyAccessor;
 
         [DoNotSerialize]
+
         private OptimizedInvokerBase methodInvoker;
 
         [DoNotSerialize]

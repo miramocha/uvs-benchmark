@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Unity.VisualScripting
 {
@@ -13,6 +14,8 @@ namespace Unity.VisualScripting
 
             this.type = type;
             this.getValue = getValue;
+            supportsFetch = getValue != null;
+            hash = (uint)RuntimeHelpers.GetHashCode(this) * 2654435769u;
         }
 
         public ValueOutput(string key, Type type) : base(key)
@@ -20,7 +23,13 @@ namespace Unity.VisualScripting
             Ensure.That(nameof(type)).IsNotNull(type);
 
             this.type = type;
+            supportsFetch = false;
+            hash = (uint)RuntimeHelpers.GetHashCode(this) * 2654435769u;
         }
+
+        private readonly uint hash;
+
+        public uint Hash => hash;
 
         internal readonly Func<Flow, ParameterValue> getValue;
 
@@ -35,7 +44,7 @@ namespace Unity.VisualScripting
         public bool supportsPrediction => canPredictValue != null;
         public bool supportsCache => cacheResult;
 
-        public bool supportsFetch => getValue != null;
+        public readonly bool supportsFetch;
 
         public Type type { get; }
 

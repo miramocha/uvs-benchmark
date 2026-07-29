@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using UnityEditor;
 using UnityEditor.Callbacks;
@@ -41,16 +42,21 @@ namespace Unity.VisualScripting
             string className = unit.compiledClassName;
             string unitTitle = "";
 
+            ActionDirection actionDirection;
+
             if (unit is GetMember)
             {
+                actionDirection = ActionDirection.Get;
                 unitTitle = member.ToString() + " (Get)";
             }
             else if (unit is SetMember)
             {
+                actionDirection = ActionDirection.Set;
                 unitTitle = member.ToString() + " (Set)";
             }
             else
             {
+                actionDirection = ActionDirection.Any;
                 if (member.isConstructor)
                 {
                     unitTitle = $"New {member.targetType.Name}";
@@ -89,7 +95,10 @@ namespace Unity.VisualScripting
             sb.AppendLine();
 
             sb.AppendLine("        [Preserve]");
-            sb.AppendLine($"        public override string Name {{ get; protected set; }} = \"{(member.isConstructor ? "new" : memberName)}\";");
+            sb.AppendLine($"        public override string CSharpName {{ get; protected set; }} = \"{(member.isConstructor ? "new" : (member.isOperator || member.isConversion) ? member.info.CSharpName(actionDirection) : memberName)}\";");
+
+            sb.AppendLine("        [Preserve]");
+            sb.AppendLine($"        public override string HumanName {{ get; protected set; }} = \"{(member.isConstructor ? "new" : (member.isOperator || member.isConversion) ? member.info.HumanName(actionDirection) : memberName)}\";");
             sb.AppendLine();
 
             sb.AppendLine("        [Preserve]");
@@ -271,7 +280,7 @@ namespace Unity.VisualScripting
                     string nullMeansSelfStr = IsNullMeansSelf(member.targetType) ? ".NullMeansSelf()" : "";
                     sb.AppendLine($"            target = ValueInput<{targetTypeStr}>(nameof(target), default){nullMeansSelfStr};");
                     sb.AppendLine("            if (chainable)");
-                    sb.AppendLine($"            targetOutput = ValueOutput<{targetTypeStr}>(nameof(targetOutput));");
+                    sb.AppendLine($"                targetOutput = ValueOutput<{targetTypeStr}>(nameof(targetOutput));");
                     sb.AppendLine("            Requirement(target, assign);");
                 }
                 string valueTypeStr = GetTypeCSharpString(member.type);
@@ -350,7 +359,24 @@ namespace Unity.VisualScripting
                 sb.AppendLine("        [Preserve]");
                 sb.AppendLine($"        private ParameterValue Get{safeMemberName}(Flow flow)");
                 sb.AppendLine("        {");
-                if (member.requiresTarget)
+
+                if (member.requiresTarget && member.targetType.IsValueType)
+                {
+                    string tStr = GetTypeCSharpString(member.targetType);
+                    string cast = GetValidParameterValueTypeCast(member.type);
+
+                    sb.AppendLine($"            var targetVal = flow.GetValueData(this.target);");
+                    sb.AppendLine($"            if (targetVal.IsBoxed)");
+                    sb.AppendLine($"            {{");
+                    sb.AppendLine($"                ref {tStr} refInstance = ref targetVal.TryUnbox<{tStr}>(out var canUnbox);");
+                    sb.AppendLine($"                if (canUnbox)");
+                    sb.AppendLine($"                    return new ParameterValue({cast}refInstance.{memberName});");
+                    sb.AppendLine($"            }}");
+                    sb.AppendLine();
+                    sb.AppendLine($"            var instance = targetVal{GetConversionString(member.targetType)};");
+                    sb.AppendLine($"            return new ParameterValue({cast}instance.{memberName});");
+                }
+                else if (member.requiresTarget)
                 {
                     sb.AppendLine($"            var instance = flow{GetValueString(member.targetType, "this.target")};");
                     sb.AppendLine($"            return new ParameterValue({GetValidParameterValueTypeCast(member.type)}instance.{memberName});");
@@ -360,6 +386,7 @@ namespace Unity.VisualScripting
                     string targetTypeStr = GetTypeCSharpString(member.targetType);
                     sb.AppendLine($"            return new ParameterValue({GetValidParameterValueTypeCast(member.type)}{targetTypeStr}.{memberName});");
                 }
+
                 sb.AppendLine("        }");
             }
             else if (unit is SetMember)
@@ -369,16 +396,39 @@ namespace Unity.VisualScripting
                 sb.AppendLine("        {");
                 if (member.requiresTarget)
                 {
-                    sb.AppendLine($"            var instance = flow{GetValueString(member.targetType, "this.target")};");
-                    sb.AppendLine($"            var input = flow{GetValueString(member.type, "this.input")};");
-                    sb.AppendLine($"            instance.{memberName} = input;");
+                    if (member.targetType.IsValueType)
+                    {
+                        string tStr = GetTypeCSharpString(member.targetType);
+                        sb.AppendLine($"            var targetVal = flow.GetValueData(this.target);");
+                        sb.AppendLine($"            var input = flow{GetValueString(member.type, "this.input")};");
+                        sb.AppendLine($"            if (targetVal.IsBoxed)");
+                        sb.AppendLine($"            {{");
+                        sb.AppendLine($"                ref {tStr} refinstance = ref targetVal.TryUnbox<{tStr}>(out var canUnbox);");
+                        sb.AppendLine($"                if (canUnbox)");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    refinstance.{memberName} = input;");
+                        sb.AppendLine($"                    if (_isTargetOutputConnected) flow.SetValue(targetOutput, targetVal);");
+                        sb.AppendLine($"                    return assigned;");
+                        sb.AppendLine($"                }}");
+                        sb.AppendLine($"            }}");
+                        sb.AppendLine();
+                        sb.AppendLine($"            var instance = targetVal{GetConversionString(member.targetType)};");
+                        sb.AppendLine($"            instance.{memberName} = input;");
+                        sb.AppendLine($"            if (_isTargetOutputConnected) flow.SetValue(targetOutput, instance);");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"            var instance = flow{GetValueString(member.targetType, "this.target")};");
+                        sb.AppendLine($"            var input = flow{GetValueString(member.type, "this.input")};");
+                        sb.AppendLine($"            instance.{memberName} = input;");
 
-                    sb.AppendLine();
+                        sb.AppendLine();
 
-                    sb.AppendLine("            if (_isTargetOutputConnected)");
-                    sb.AppendLine("                flow.SetValue(targetOutput, instance);");
+                        sb.AppendLine("            if (_isTargetOutputConnected)");
+                        sb.AppendLine("                flow.SetValue(targetOutput, instance);");
 
-                    sb.AppendLine();
+                        sb.AppendLine();
+                    }
                 }
                 else
                 {
@@ -395,13 +445,8 @@ namespace Unity.VisualScripting
             else if (unit is InvokeMember)
             {
                 var parameters = member.GetParameterInfos().ToArray();
-                string targetDeclaration = "";
-                string invocationTarget = GetTypeCSharpString(member.targetType);
-                if (member.requiresTarget)
-                {
-                    targetDeclaration = $"            var instance = flow{GetValueString(member.targetType, "this.target")};\r\n";
-                    invocationTarget = "instance";
-                }
+                string targetDeclaration = $"            var instance = flow{GetValueString(member.targetType, "this.target")};";
+                string invocationTarget = member.requiresTarget ? "instance" : GetTypeCSharpString(member.targetType);
 
                 StringBuilder fetchInputsSB = new StringBuilder();
                 foreach (var p in parameters)
@@ -409,24 +454,16 @@ namespace Unity.VisualScripting
                     var pType = p.ParameterType.IsByRef ? p.ParameterType.GetElementType() : p.ParameterType;
                     string pTypeStr = GetTypeCSharpString(pType);
                     if (!p.IsOut)
-                    {
                         fetchInputsSB.AppendLine($"            var local_{p.Name} = flow{GetValueString(pType, p.Name)};");
-                    }
                     else
-                    {
                         fetchInputsSB.AppendLine($"            {pTypeStr} local_{p.Name};");
-                    }
                 }
 
                 string[] argNames = new string[parameters.Length];
                 for (int i = 0; i < parameters.Length; i++)
                 {
                     var p = parameters[i];
-                    string prefix = "";
-                    if (p.ParameterType.IsByRef)
-                    {
-                        prefix = p.IsOut ? "out " : "ref ";
-                    }
+                    string prefix = p.ParameterType.IsByRef ? (p.IsOut ? "out " : "ref ") : "";
                     argNames[i] = $"{prefix}local_{p.Name}";
                 }
                 string argumentsStr = string.Join(", ", argNames);
@@ -435,39 +472,76 @@ namespace Unity.VisualScripting
                 foreach (var p in parameters)
                 {
                     if (p.ParameterType.IsByRef || p.IsOut)
-                    {
                         setOutputsSB.AppendLine($"            flow.SetValue({p.Name}Output, local_{p.Name});");
-                    }
+                }
+
+                string methodInvocation;
+                if (member.isConstructor)
+                {
+                    methodInvocation = $"var value = new {invocationTarget}({argumentsStr});";
+                }
+                else if (member.isConversion)
+                {
+                    string returnTypeStr = GetTypeCSharpString(member.type);
+                    methodInvocation = $"var value = ({returnTypeStr}){argNames[0]};";
+                }
+                else if (member.isOperator)
+                {
+                    string opSymbol = GetOperatorSymbol(member.name);
+                    if (parameters.Length == 2)
+                        methodInvocation = $"var value = {argNames[0]} {opSymbol} {argNames[1]};";
+                    else if (parameters.Length == 1)
+                        methodInvocation = $"var value = {opSymbol}{argNames[0]};";
+                    else
+                        methodInvocation = $"var value = {invocationTarget}.{memberName}({argumentsStr});"; // Fallback
+                }
+                else
+                {
+                    methodInvocation = member.type == typeof(void)
+                        ? $"{invocationTarget}.{memberName}({argumentsStr});"
+                        : $"var value = {invocationTarget}.{memberName}({argumentsStr});";
                 }
 
                 sb.AppendLine("        [Preserve]");
                 sb.AppendLine($"        private ControlOutput Assign{safeMemberName}(Flow flow)");
                 sb.AppendLine("        {");
-                if (member.requiresTarget) sb.Append(targetDeclaration);
                 sb.Append(fetchInputsSB.ToString());
 
-                if (member.isConstructor)
+                if (member.requiresTarget && member.targetType.IsValueType)
                 {
-                    sb.AppendLine($"            var value = new {invocationTarget}({argumentsStr});");
+                    string tStr = GetTypeCSharpString(member.targetType);
+                    sb.AppendLine($"            var targetVal = flow.GetValueData(this.target);");
+                    sb.AppendLine($"            if (targetVal.IsBoxed)");
+                    sb.AppendLine($"            {{");
+                    sb.AppendLine($"                ref {tStr} refInstance = ref targetVal.TryUnbox<{tStr}>(out var canUnbox);");
+                    sb.AppendLine($"                if (canUnbox)");
+                    sb.AppendLine($"                {{");
+                    sb.AppendLine($"                    {(member.type == typeof(void) ? $"refInstance.{memberName}({argumentsStr});" : $"var value = refInstance.{memberName}({argumentsStr});")}");
                     sb.Append(setOutputsSB.ToString());
-                    sb.AppendLine("            flow.SetValue(result, value);");
-                }
-                else if (member.type == typeof(void))
-                {
-                    sb.AppendLine($"            {invocationTarget}.{memberName}({argumentsStr});");
+                    if (member.type != typeof(void)) sb.AppendLine("                    flow.SetValue(result, value);");
+                    sb.AppendLine($"                    if (chainable) flow.SetValue(targetOutput, targetVal);");
+                    sb.AppendLine($"                    return exit;");
+                    sb.AppendLine($"                }}");
+                    sb.AppendLine($"            }}");
+                    sb.AppendLine();
+
+                    sb.AppendLine($"            var instance = targetVal{GetConversionString(member.targetType)};");
+                    sb.AppendLine($"            {methodInvocation}");
                     sb.Append(setOutputsSB.ToString());
+                    if (member.type != typeof(void)) sb.AppendLine("            flow.SetValue(result, value);");
+                    sb.AppendLine($"            if (chainable) flow.SetValue(targetOutput, instance);");
                 }
                 else
                 {
-                    sb.AppendLine($"            var value = {invocationTarget}.{memberName}({argumentsStr});");
+                    if (member.requiresTarget) sb.AppendLine(targetDeclaration);
+                    sb.AppendLine($"            {methodInvocation}");
                     sb.Append(setOutputsSB.ToString());
-                    sb.AppendLine("            flow.SetValue(result, value);");
-                }
-
-                if (member.requiresTarget)
-                {
-                    sb.AppendLine("            if (chainable)");
-                    sb.AppendLine("                flow.SetValue(targetOutput, instance);");
+                    if (member.type != typeof(void)) sb.AppendLine("            flow.SetValue(result, value);");
+                    if (member.requiresTarget)
+                    {
+                        sb.AppendLine("            if (chainable)");
+                        sb.AppendLine("                flow.SetValue(targetOutput, instance);");
+                    }
                 }
 
                 sb.AppendLine("            return exit;");
@@ -475,28 +549,44 @@ namespace Unity.VisualScripting
 
                 if (member.type != typeof(void))
                 {
-                    sb.AppendLine();
                     sb.AppendLine("        [Preserve]");
                     sb.AppendLine($"        private ParameterValue Get{safeMemberName}(Flow flow)");
                     sb.AppendLine("        {");
-                    if (member.requiresTarget) sb.Append(targetDeclaration);
                     sb.Append(fetchInputsSB.ToString());
 
-                    if (member.isConstructor)
+                    if (member.requiresTarget && member.targetType.IsValueType)
                     {
-                        sb.AppendLine($"            var value = new {invocationTarget}({argumentsStr});");
+                        string tStr = GetTypeCSharpString(member.targetType);
+
+                        sb.AppendLine($"            var targetVal = flow.GetValueData(this.target);");
+                        sb.AppendLine($"            if (targetVal.IsBoxed)");
+                        sb.AppendLine($"            {{");
+                        sb.AppendLine($"                ref {tStr} refInstance = ref targetVal.TryUnbox<{tStr}>(out var canUnbox);");
+                        sb.AppendLine($"                if (canUnbox)");
+                        sb.AppendLine($"                {{");
+                        sb.AppendLine($"                    {(member.type == typeof(void) ? $"refInstance.{memberName}({argumentsStr});" : $"var value = refInstance.{memberName}({argumentsStr});")}");
+                        sb.Append(setOutputsSB.ToString());
+                        sb.AppendLine($"                    return new ParameterValue({GetValidParameterValueTypeCast(member.type)}value);");
+                        sb.AppendLine($"                }}");
+                        sb.AppendLine($"            }}");
+                        sb.AppendLine();
+
+                        sb.AppendLine($"            var instance = targetVal{GetConversionString(member.targetType)};");
+                        sb.AppendLine($"            {methodInvocation}");
+                        sb.Append(setOutputsSB.ToString());
+                        sb.AppendLine($"            return new ParameterValue({GetValidParameterValueTypeCast(member.type)}value);");
                     }
                     else
                     {
-                        sb.AppendLine($"            var value = {invocationTarget}.{memberName}({argumentsStr});");
+                        if (member.requiresTarget) sb.AppendLine(targetDeclaration);
+                        sb.AppendLine($"            {methodInvocation}");
+                        sb.Append(setOutputsSB.ToString());
+                        sb.AppendLine($"            return new ParameterValue({GetValidParameterValueTypeCast(member.type)}value);");
                     }
 
-                    sb.Append(setOutputsSB.ToString());
-                    sb.AppendLine($"            return new ParameterValue({GetValidParameterValueTypeCast(member.type)}value);");
                     sb.AppendLine("        }");
                 }
             }
-
             sb.AppendLine();
 
             sb.AppendLine("        [Preserve]");
@@ -626,6 +716,13 @@ namespace Unity.VisualScripting
             return $".GetValue<{GetTypeCSharpString(type)}>({Port})";
         }
 
+        private static string GetConversionString(Type type)
+        {
+            if (IsValidParameterValueFieldType(type))
+                return $".{GetExplicitConversionMethod(type)}";
+            return $".Cast<{GetTypeCSharpString(type)}>()";
+        }
+
         private static bool IsValidParameterValueFieldType(Type type)
         {
             var valueType = ParameterValue.GetParameterValueType(type);
@@ -658,16 +755,54 @@ namespace Unity.VisualScripting
             if (type == typeof(ulong)) return "ToUInt64()";
             if (type == typeof(float)) return "ToSingle()";
             if (type == typeof(double)) return "ToDouble()";
+            if (type == typeof(decimal)) return "ToDecimal()";
             if (type == typeof(bool)) return "ToBool()";
             if (type == typeof(string)) return "ToString()";
 
             if (type == typeof(Vector2)) return "ToVector2()";
             if (type == typeof(Vector3)) return "ToVector3()";
             if (type == typeof(Vector4)) return "ToVector4()";
+            if (type == typeof(Vector2Int)) return "ToVector2Int()";
+            if (type == typeof(Vector3Int)) return "ToVector3Int()";
+            if (type == typeof(Rect)) return "ToRect()";
+            if (type == typeof(Ray2D)) return "ToRay2D()";
             if (type == typeof(Color)) return "ToColor()";
             if (type == typeof(Quaternion)) return "ToQuaternion()";
 
             throw new ArgumentException($"Unsupported explicit conversion type: {type?.FullName}");
+        }
+
+        private static string GetOperatorSymbol(string methodName)
+        {
+            switch (methodName)
+            {
+                case "op_Addition": return "+";
+                case "op_Subtraction": return "-";
+                case "op_Multiply": return "*";
+                case "op_Division": return "/";
+                case "op_Modulus": return "%";
+                case "op_ExclusiveOr": return "^";
+                case "op_BitwiseAnd": return "&";
+                case "op_BitwiseOr": return "|";
+                case "op_LogicalAnd": return "&&";
+                case "op_LogicalOr": return "||";
+                case "op_Assign": return "=";
+                case "op_LeftShift": return "<<";
+                case "op_RightShift": return ">>";
+                case "op_Equality": return "==";
+                case "op_GreaterThan": return ">";
+                case "op_LessThan": return "<";
+                case "op_Inequality": return "!=";
+                case "op_GreaterThanOrEqual": return ">=";
+                case "op_LessThanOrEqual": return "<=";
+                case "op_UnaryNegation": return "-";
+                case "op_UnaryPlus": return "+";
+                case "op_LogicalNot": return "!";
+                case "op_OnesComplement": return "~";
+                case "op_Increment": return "++";
+                case "op_Decrement": return "--";
+                default: return methodName;
+            }
         }
 
         [DidReloadScripts]

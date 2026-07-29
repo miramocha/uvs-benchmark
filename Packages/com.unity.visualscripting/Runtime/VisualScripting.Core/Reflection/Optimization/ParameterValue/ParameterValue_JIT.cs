@@ -291,6 +291,31 @@ namespace Unity.VisualScripting
                 return Unsafe.As<Quaternion, T>(ref val);
             }
 
+            // New types
+            if (typeof(T) == typeof(Vector2Int))
+            {
+                Vector2Int val = ToVector2Int();
+                return Unsafe.As<Vector2Int, T>(ref val);
+            }
+
+            if (typeof(T) == typeof(Vector3Int))
+            {
+                Vector3Int val = ToVector3Int();
+                return Unsafe.As<Vector3Int, T>(ref val);
+            }
+
+            if (typeof(T) == typeof(Rect))
+            {
+                Rect val = ToRect();
+                return Unsafe.As<Rect, T>(ref val);
+            }
+
+            if (typeof(T) == typeof(Ray2D))
+            {
+                Ray2D val = ToRay2D();
+                return Unsafe.As<Ray2D, T>(ref val);
+            }
+
             if (type == ValueType.Object)
             {
                 return ObjectValue.ConvertTo<T>();
@@ -302,10 +327,7 @@ namespace Unity.VisualScripting
         [MethodImpl(MethodImplOptions.NoInlining)]
         public readonly bool IsAssignableFrom(Type type)
         {
-            if (type == typeof(object))
-            {
-                return true;
-            }
+            if (type == typeof(object)) return true;
 
             switch (this.type)
             {
@@ -315,6 +337,8 @@ namespace Unity.VisualScripting
                     return ConversionUtility.HasNumericConversion(typeof(float), type) || ConversionUtility.CanConvert(typeof(float), type, true);
                 case ValueType.Double:
                     return ConversionUtility.HasNumericConversion(typeof(double), type) || ConversionUtility.CanConvert(typeof(double), type, true);
+                case ValueType.Decimal: // Added
+                    return ConversionUtility.HasNumericConversion(typeof(decimal), type) || ConversionUtility.CanConvert(typeof(decimal), type, true);
                 case ValueType.Byte:
                     return ConversionUtility.HasNumericConversion(typeof(byte), type) || ConversionUtility.CanConvert(typeof(byte), type, true);
                 case ValueType.SByte:
@@ -334,11 +358,13 @@ namespace Unity.VisualScripting
                     return type == typeof(bool) || ConversionUtility.CanConvert(typeof(bool), type, true);
 
                 case ValueType.Vector2:
-                    return IsVectorAssignable(type, typeof(Vector2));
                 case ValueType.Vector3:
-                    return IsVectorAssignable(type, typeof(Vector3));
                 case ValueType.Vector4:
-                    return IsVectorAssignable(type, typeof(Vector4));
+                case ValueType.Vector2Int:
+                case ValueType.Vector3Int:
+                case ValueType.Rect:
+                case ValueType.Ray2D:
+                    return IsVectorAssignable(type, GetSystemType(this.type));
 
                 case ValueType.Color:
                     return type == typeof(Color) || type == typeof(Vector4) || ConversionUtility.CanConvert(typeof(Color), type, true);
@@ -351,12 +377,7 @@ namespace Unity.VisualScripting
 
                 case ValueType.Object:
                     var objectValue = ObjectValue;
-
-                    if (objectValue == null)
-                    {
-                        return IsNullable(type);
-                    }
-
+                    if (objectValue == null) return IsNullable(type);
                     return objectValue.IsConvertibleTo(type, true);
 
                 case ValueType.None:
@@ -378,14 +399,19 @@ namespace Unity.VisualScripting
                 typeof(T) == typeof(long) || typeof(T) == typeof(double) ||
                 typeof(T) == typeof(byte) || typeof(T) == typeof(sbyte) ||
                 typeof(T) == typeof(short) || typeof(T) == typeof(ushort) ||
-                typeof(T) == typeof(uint) || typeof(T) == typeof(ulong))
+                typeof(T) == typeof(uint) || typeof(T) == typeof(ulong) ||
+                typeof(T) == typeof(decimal))
             {
-                return (type >= ValueType.Byte && type <= ValueType.Double) || (type == ValueType.Object && (ObjectValue?.IsConvertibleTo<T>(true) ?? false));
+                return (type >= ValueType.Byte && type <= ValueType.Decimal) ||
+                       (type == ValueType.Object && (ObjectValue?.IsConvertibleTo<T>(true) ?? false));
             }
 
-            if (typeof(T) == typeof(Vector3) || typeof(T) == typeof(Vector2) || typeof(T) == typeof(Vector4))
+            if (typeof(T) == typeof(Vector3) || typeof(T) == typeof(Vector2) || typeof(T) == typeof(Vector4) ||
+                typeof(T) == typeof(Vector2Int) || typeof(T) == typeof(Vector3Int) ||
+                typeof(T) == typeof(Rect) || typeof(T) == typeof(Ray2D))
             {
-                return (type >= ValueType.Vector2 && type <= ValueType.Vector4) || ConversionUtility.CanConvert(GetValueType(), typeof(T), true); // Slower but flexible conversion
+                return (type >= ValueType.Vector2 && type <= ValueType.Ray2D) ||
+                       ConversionUtility.CanConvert(GetValueType(), typeof(T), true);
             }
 
             if (typeof(T) == typeof(bool)) return type == ValueType.Bool || ConversionUtility.CanConvert(GetValueType(), typeof(T), true);
@@ -400,9 +426,12 @@ namespace Unity.VisualScripting
 
         private static bool IsVectorAssignable(Type targetType, Type sourceType)
         {
-            if (targetType == typeof(Vector3)) return true;
-            if (targetType == typeof(Vector2)) return true;
-            if (targetType == typeof(Vector4)) return true;
+            if (targetType == typeof(Vector3) || targetType == typeof(Vector2) || targetType == typeof(Vector4) ||
+                targetType == typeof(Vector2Int) || targetType == typeof(Vector3Int) ||
+                targetType == typeof(Rect) || targetType == typeof(Ray2D))
+            {
+                return true;
+            }
 
             if (targetType == typeof(object)) return true;
 
@@ -419,32 +448,32 @@ namespace Unity.VisualScripting
 
             if (typeof(T) == typeof(int))
             {
-                if (type == ValueType.Int) return Unsafe.As<int, T>(ref Unsafe.AsRef(in intValue));
-                int v = CoerceToInt32(); return Unsafe.As<int, T>(ref v);
+                int v = ToInt32();
+                return Unsafe.As<int, T>(ref v);
             }
 
             if (typeof(T) == typeof(float))
             {
-                if (type == ValueType.Float) return Unsafe.As<float, T>(ref Unsafe.AsRef(in floatValue));
-                float v = CoerceToSingle(); return Unsafe.As<float, T>(ref v);
+                float v = ToSingle();
+                return Unsafe.As<float, T>(ref v);
             }
 
             if (typeof(T) == typeof(bool))
             {
-                if (type == ValueType.Bool) return Unsafe.As<bool, T>(ref Unsafe.AsRef(in boolValue));
-                bool v = CoerceToBool(); return Unsafe.As<bool, T>(ref v);
+                bool v = ToBool();
+                return Unsafe.As<bool, T>(ref v);
             }
 
             if (typeof(T) == typeof(Vector2))
             {
-                if (type == ValueType.Vector2) return Unsafe.As<Vector2, T>(ref Unsafe.AsRef(in vector2Value));
-                Vector2 v = CoerceToVector2(); return Unsafe.As<Vector2, T>(ref v);
+                Vector2 v = ToVector2();
+                return Unsafe.As<Vector2, T>(ref v);
             }
 
             if (typeof(T) == typeof(Vector3))
             {
-                if (type == ValueType.Vector3) return Unsafe.As<Vector3, T>(ref Unsafe.AsRef(in vector3Value));
-                Vector3 v = CoerceToVector3(); return Unsafe.As<Vector3, T>(ref v);
+                Vector3 v = ToVector3();
+                return Unsafe.As<Vector3, T>(ref v);
             }
 
             if (typeof(T) == typeof(string))
@@ -461,68 +490,98 @@ namespace Unity.VisualScripting
 
             if (typeof(T) == typeof(Vector4))
             {
-                if (type == ValueType.Vector4) return Unsafe.As<Vector4, T>(ref Unsafe.AsRef(in vector4Value));
-                Vector4 v = CoerceToVector4(); return Unsafe.As<Vector4, T>(ref v);
+                Vector4 v = ToVector4();
+                return Unsafe.As<Vector4, T>(ref v);
             }
 
             if (typeof(T) == typeof(Color))
             {
-                if (type == ValueType.Color) return Unsafe.As<Color, T>(ref Unsafe.AsRef(in colorValue));
-                Color v = CoerceToColor(); return Unsafe.As<Color, T>(ref v);
+                Color v = ToColor();
+                return Unsafe.As<Color, T>(ref v);
             }
 
             if (typeof(T) == typeof(Quaternion))
             {
-                if (type == ValueType.Quaternion) return Unsafe.As<Quaternion, T>(ref Unsafe.AsRef(in quaternionValue));
-                Quaternion v = CoerceToQuaternion(); return Unsafe.As<Quaternion, T>(ref v);
+                Quaternion v = ToQuaternion();
+                return Unsafe.As<Quaternion, T>(ref v);
             }
 
             if (typeof(T) == typeof(long))
             {
-                if (type == ValueType.Long) return Unsafe.As<long, T>(ref Unsafe.AsRef(in longValue));
-                long v = CoerceToInt64(); return Unsafe.As<long, T>(ref v);
+                long v = ToInt64();
+                return Unsafe.As<long, T>(ref v);
             }
 
             if (typeof(T) == typeof(double))
             {
-                if (type == ValueType.Double) return Unsafe.As<double, T>(ref Unsafe.AsRef(in doubleValue));
-                double v = CoerceToDouble(); return Unsafe.As<double, T>(ref v);
+                double v = ToDouble();
+                return Unsafe.As<double, T>(ref v);
             }
 
             if (typeof(T) == typeof(byte))
             {
-                if (type == ValueType.Byte) return Unsafe.As<byte, T>(ref Unsafe.AsRef(in byteValue));
-                byte v = CoerceToByte(); return Unsafe.As<byte, T>(ref v);
+                byte v = ToByte();
+                return Unsafe.As<byte, T>(ref v);
             }
 
             if (typeof(T) == typeof(uint))
             {
-                if (type == ValueType.UInt) return Unsafe.As<uint, T>(ref Unsafe.AsRef(in uintValue));
-                uint v = CoerceToUInt32(); return Unsafe.As<uint, T>(ref v);
+                uint v = ToUInt32();
+                return Unsafe.As<uint, T>(ref v);
             }
 
             if (typeof(T) == typeof(ulong))
             {
-                if (type == ValueType.ULong) return Unsafe.As<ulong, T>(ref Unsafe.AsRef(in ulongValue));
-                ulong v = CoerceToUInt64(); return Unsafe.As<ulong, T>(ref v);
+                ulong v = ToUInt64();
+                return Unsafe.As<ulong, T>(ref v);
             }
 
             if (typeof(T) == typeof(short))
             {
-                if (type == ValueType.Short) return Unsafe.As<short, T>(ref Unsafe.AsRef(in shortValue));
-                short v = CoerceToInt16(); return Unsafe.As<short, T>(ref v);
+                short v = ToInt16();
+                return Unsafe.As<short, T>(ref v);
             }
 
             if (typeof(T) == typeof(ushort))
             {
-                if (type == ValueType.UShort) return Unsafe.As<ushort, T>(ref Unsafe.AsRef(in ushortValue));
-                ushort v = CoerceToUInt16(); return Unsafe.As<ushort, T>(ref v);
+                ushort v = ToUInt16();
+                return Unsafe.As<ushort, T>(ref v);
             }
 
             if (typeof(T) == typeof(sbyte))
             {
-                if (type == ValueType.SByte) return Unsafe.As<sbyte, T>(ref Unsafe.AsRef(in sbyteValue));
-                sbyte v = CoerceToSByte(); return Unsafe.As<sbyte, T>(ref v);
+                sbyte v = ToSByte();
+                return Unsafe.As<sbyte, T>(ref v);
+            }
+
+            if (typeof(T) == typeof(decimal))
+            {
+                decimal v = ToDecimal();
+                return Unsafe.As<decimal, T>(ref v);
+            }
+
+            if (typeof(T) == typeof(Vector2Int))
+            {
+                Vector2Int v = ToVector2Int();
+                return Unsafe.As<Vector2Int, T>(ref v);
+            }
+
+            if (typeof(T) == typeof(Vector3Int))
+            {
+                Vector3Int v = ToVector3Int();
+                return Unsafe.As<Vector3Int, T>(ref v);
+            }
+
+            if (typeof(T) == typeof(Rect))
+            {
+                Rect v = ToRect();
+                return Unsafe.As<Rect, T>(ref v);
+            }
+
+            if (typeof(T) == typeof(Ray2D))
+            {
+                Ray2D v = ToRay2D();
+                return Unsafe.As<Ray2D, T>(ref v);
             }
 
             return CastObject<T>();
@@ -599,6 +658,27 @@ namespace Unity.VisualScripting
                 return new ParameterValue(Unsafe.As<T, Color>(ref value));
             }
 
+            if (typeof(T) == typeof(decimal))
+            {
+                return new ParameterValue(Unsafe.As<T, decimal>(ref value));
+            }
+            if (typeof(T) == typeof(Vector2Int))
+            {
+                return new ParameterValue(Unsafe.As<T, Vector2Int>(ref value));
+            }
+            if (typeof(T) == typeof(Vector3Int))
+            {
+                return new ParameterValue(Unsafe.As<T, Vector3Int>(ref value));
+            }
+            if (typeof(T) == typeof(Rect))
+            {
+                return new ParameterValue(Unsafe.As<T, Rect>(ref value));
+            }
+            if (typeof(T) == typeof(Ray2D))
+            {
+                return new ParameterValue(Unsafe.As<T, Ray2D>(ref value));
+            }
+
             if (typeof(T) == typeof(string))
             {
                 return new ParameterValue(Unsafe.As<T, string>(ref value));
@@ -620,12 +700,17 @@ namespace Unity.VisualScripting
             ValueType.ULong => typeof(ulong),
             ValueType.Float => typeof(float),
             ValueType.Double => typeof(double),
+            ValueType.Decimal => typeof(decimal),
             ValueType.Bool => typeof(bool),
             ValueType.Vector2 => typeof(Vector2),
             ValueType.Vector3 => typeof(Vector3),
             ValueType.Vector4 => typeof(Vector4),
             ValueType.Quaternion => typeof(Quaternion),
             ValueType.Color => typeof(Color),
+            ValueType.Vector2Int => typeof(Vector2Int),
+            ValueType.Vector3Int => typeof(Vector3Int),
+            ValueType.Rect => typeof(Rect),
+            ValueType.Ray2D => typeof(Ray2D),
             ValueType.String => typeof(string),
             ValueType.Object => ObjectValue?.GetType(),
             _ => null

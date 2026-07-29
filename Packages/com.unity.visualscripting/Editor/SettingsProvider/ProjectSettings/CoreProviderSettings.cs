@@ -15,27 +15,31 @@ namespace Unity.VisualScripting
     {
         private readonly PluginConfigurationItemMetadata _aotSafeMode;
         private readonly PluginConfigurationItemMetadata _flowDebugging;
+        private readonly PluginConfigurationItemMetadata _flowRecursionSafety;
 
         private const string Title = "Core Settings";
-        private const string ProfilingSymbol = "ENABLE_UVS_PROFILING";
 
         readonly GUIContent _toggleAOTSafeModeLabel = new GUIContent("AOT Safe Mode");
         readonly GUIContent _toggleFlowDebuggingLabel = new GUIContent("Flow Debugging", BoltFlowConfiguration.FlowDebuggingTooltip);
+        readonly GUIContent _toggleRecursionSafetyLabel = new GUIContent("Recursion Safety", BoltFlowConfiguration.RecursionSafetyTooltip);
         readonly GUIContent _toggleProfilingLabel = new GUIContent("Enable Profiling", "Enables Units to appear in the Profiler Window.");
 
         private bool _setting;
         private Flow.FlowDebuggingMode _flowDebuggingSetting;
+        private Flow.FlowRecursionSafety _flowRecursionSafetySetting;
         private bool _enableProfilingSetting;
 
         public CoreSettings(BoltCoreConfiguration coreConfig, BoltFlowConfiguration flowConfig)
         {
             _aotSafeMode = coreConfig.GetMetadata(nameof(BoltCoreConfiguration.aotSafeMode));
             _flowDebugging = flowConfig.GetMetadata(nameof(BoltFlowConfiguration.flowDebugging));
+            _flowRecursionSafety = flowConfig.GetMetadata(nameof(BoltFlowConfiguration.flowRecursionSafety));
 
             _setting = (bool)_aotSafeMode.value;
             _flowDebuggingSetting = (Flow.FlowDebuggingMode)_flowDebugging.value;
+            _flowRecursionSafetySetting = (Flow.FlowRecursionSafety)_flowRecursionSafety.value;
 
-            _enableProfilingSetting = IsDefineEnabled(ProfilingSymbol);
+            _enableProfilingSetting = ScriptingDefineUtility.IsDefineEnabled(ScriptingDefineUtility.ProfilingSymbol);
         }
 
         private void SaveIfNeeded()
@@ -56,9 +60,40 @@ namespace Unity.VisualScripting
                 Flow.debuggingMode = _flowDebuggingSetting;
             }
 
-            if (_enableProfilingSetting != IsDefineEnabled(ProfilingSymbol))
+            if (_flowRecursionSafetySetting != (Flow.FlowRecursionSafety)_flowRecursionSafety.value)
             {
-                SetDefine(ProfilingSymbol, _enableProfilingSetting);
+                _flowRecursionSafety.value = _flowRecursionSafetySetting;
+                _flowRecursionSafety.SaveImmediately();
+
+                bool enableEditorDefine =
+                    _flowRecursionSafetySetting == Flow.FlowRecursionSafety.Editor ||
+                    _flowRecursionSafetySetting == Flow.FlowRecursionSafety.EditorAndBuild;
+
+                bool enableBuildDefine =
+                    _flowRecursionSafetySetting == Flow.FlowRecursionSafety.Build ||
+                    _flowRecursionSafetySetting == Flow.FlowRecursionSafety.EditorAndBuild;
+
+                bool editorEnabled = ScriptingDefineUtility.IsDefineEnabled(ScriptingDefineUtility.EditorRecursionSymbol);
+                bool buildEnabled = ScriptingDefineUtility.IsDefineEnabled(ScriptingDefineUtility.BuildRecursionSymbol);
+
+                if (enableEditorDefine != editorEnabled)
+                {
+                    ScriptingDefineUtility.SetDefine(
+                        ScriptingDefineUtility.EditorRecursionSymbol,
+                        enableEditorDefine);
+                }
+
+                if (enableBuildDefine != buildEnabled)
+                {
+                    ScriptingDefineUtility.SetDefine(
+                        ScriptingDefineUtility.BuildRecursionSymbol,
+                        enableBuildDefine);
+                }
+            }
+
+            if (_enableProfilingSetting != ScriptingDefineUtility.IsDefineEnabled(ScriptingDefineUtility.ProfilingSymbol))
+            {
+                ScriptingDefineUtility.SetDefine(ScriptingDefineUtility.ProfilingSymbol, _enableProfilingSetting);
             }
         }
 
@@ -76,99 +111,9 @@ namespace Unity.VisualScripting
 
             _flowDebuggingSetting = (Flow.FlowDebuggingMode)EditorGUILayout.EnumPopup(_toggleFlowDebuggingLabel, _flowDebuggingSetting);
 
+            _flowRecursionSafetySetting = (Flow.FlowRecursionSafety)EditorGUILayout.EnumPopup(_toggleRecursionSafetyLabel, _flowRecursionSafetySetting);
+
             SaveIfNeeded();
         }
-
-        #region Scripting Defines Helpers
-
-        private static bool IsDefineEnabled(string symbol)
-        {
-#if UNITY_6000_0_OR_NEWER
-            BuildProfile activeProfile = BuildProfile.GetActiveBuildProfile();
-            if (activeProfile != null)
-            {
-                return activeProfile.scriptingDefines != null && activeProfile.scriptingDefines.Contains(symbol);
-            }
-#endif
-
-#if UNITY_2022_1_OR_NEWER
-            var target = NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
-            string definesString = PlayerSettings.GetScriptingDefineSymbols(target);
-#else
-            var target = EditorUserBuildSettings.selectedBuildTargetGroup;
-            string definesString = PlayerSettings.GetScriptingDefineSymbolsForGroup(target);
-#endif
-            return definesString.Split(';').Contains(symbol);
-        }
-
-        private static void SetDefine(string symbol, bool enabled)
-        {
-            if (string.IsNullOrWhiteSpace(symbol)) return;
-
-#if UNITY_6000_0_OR_NEWER
-            BuildProfile activeProfile = BuildProfile.GetActiveBuildProfile();
-
-            if (activeProfile != null)
-            {
-                List<string> list = activeProfile.scriptingDefines != null 
-                    ? activeProfile.scriptingDefines.Where(d => !string.IsNullOrWhiteSpace(d)).ToList() 
-                    : new List<string>();
-
-                bool changed = false;
-                if (enabled && !list.Contains(symbol))
-                {
-                    list.Add(symbol);
-                    changed = true;
-                }
-                else if (!enabled && list.Contains(symbol))
-                {
-                    list.Remove(symbol);
-                    changed = true;
-                }
-
-                if (changed)
-                {
-                    activeProfile.scriptingDefines = list.ToArray();
-                    EditorUtility.SetDirty(activeProfile);
-                    AssetDatabase.SaveAssetIfDirty(activeProfile);
-                }
-                return;
-            }
-#endif
-
-#if UNITY_2022_1_OR_NEWER
-            var target = NamedBuildTarget.FromBuildTargetGroup(EditorUserBuildSettings.selectedBuildTargetGroup);
-            string definesString = PlayerSettings.GetScriptingDefineSymbols(target);
-#else
-            var target = EditorUserBuildSettings.selectedBuildTargetGroup;
-            string definesString = PlayerSettings.GetScriptingDefineSymbolsForGroup(target);
-#endif
-
-            List<string> legacyList = definesString.Split(';').Where(d => !string.IsNullOrWhiteSpace(d)).ToList();
-            bool legacyChanged = false;
-
-            if (enabled && !legacyList.Contains(symbol))
-            {
-                legacyList.Add(symbol);
-                legacyChanged = true;
-            }
-            else if (!enabled && legacyList.Contains(symbol))
-            {
-                legacyList.Remove(symbol);
-                legacyChanged = true;
-            }
-
-            if (!legacyChanged) return;
-
-            string result = string.Join(";", legacyList);
-
-#if UNITY_2022_1_OR_NEWER
-            PlayerSettings.SetScriptingDefineSymbols(target, result);
-#else
-            PlayerSettings.SetScriptingDefineSymbolsForGroup(target, result);
-#endif
-        }
-
-        #endregion
     }
 }

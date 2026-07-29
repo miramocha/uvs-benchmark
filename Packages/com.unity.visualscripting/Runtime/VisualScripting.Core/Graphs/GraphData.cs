@@ -5,9 +5,9 @@ using UnityEngine;
 
 namespace Unity.VisualScripting
 {
-    internal sealed class GraphReferenceEqualityComparer<T> : IEqualityComparer<T> where T : class
+    internal sealed class DataEqualityComparer<T> : IEqualityComparer<T> where T : class
     {
-        public static readonly GraphReferenceEqualityComparer<T> Instance = new GraphReferenceEqualityComparer<T>();
+        public static readonly DataEqualityComparer<T> Instance = new DataEqualityComparer<T>();
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Equals(T x, T y) => ReferenceEquals(x, y);
@@ -26,9 +26,9 @@ namespace Unity.VisualScripting
 
         protected TGraph definition { get; }
 
-        protected Dictionary<IGraphElementWithData, IGraphElementData> elementsData { get; } = new Dictionary<IGraphElementWithData, IGraphElementData>(GraphReferenceEqualityComparer<IGraphElementWithData>.Instance);
+        protected Dictionary<IGraphElementWithData, IGraphElementData> elementsData { get; } = new Dictionary<IGraphElementWithData, IGraphElementData>(DataEqualityComparer<IGraphElementWithData>.Instance);
 
-        protected Dictionary<IGraphParentElement, IGraphData> childrenGraphsData { get; } = new Dictionary<IGraphParentElement, IGraphData>(GraphReferenceEqualityComparer<IGraphParentElement>.Instance);
+        protected Dictionary<IGraphParentElement, IGraphData> childrenGraphsData { get; } = new Dictionary<IGraphParentElement, IGraphData>(DataEqualityComparer<IGraphParentElement>.Instance);
 
         protected Dictionary<Guid, IGraphElementData> phantomElementsData { get; } = new Dictionary<Guid, IGraphElementData>();
 

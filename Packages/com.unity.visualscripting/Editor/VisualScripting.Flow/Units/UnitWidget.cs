@@ -1161,7 +1161,7 @@ namespace Unity.VisualScripting
 
             context.BeginEdit();
 
-            UndoUtility.RecordEditedObject($"Replaced {unit.Name} unit");
+            UndoUtility.RecordEditedObject($"Replaced {unit.CSharpName} unit");
 
             var graph = oldUnit.graph;
             oldUnit.graph.units.Remove(oldUnit);

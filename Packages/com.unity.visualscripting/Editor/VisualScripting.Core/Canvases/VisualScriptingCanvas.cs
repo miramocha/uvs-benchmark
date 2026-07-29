@@ -88,30 +88,6 @@ namespace Unity.VisualScripting
 
         private readonly WidgetList<IGraphElementWidget> elementWidgets;
 
-        private IEnumerable<IWidget> GetWidgets()
-        {
-            foreach (var element in graph.elements)
-            {
-                foreach (var widget in GetWidgetsRecursive(this.Widget(element)))
-                {
-                    yield return widget;
-                }
-            }
-        }
-
-        private IEnumerable<IWidget> GetWidgetsRecursive(IWidget widget)
-        {
-            yield return widget;
-
-            foreach (var subWidget in widget.subWidgets)
-            {
-                foreach (var subWidgetRecursive in GetWidgetsRecursive(subWidget))
-                {
-                    yield return subWidgetRecursive;
-                }
-            }
-        }
-
         private bool collectionsAreValid;
 
         public void Recollect()
@@ -119,29 +95,51 @@ namespace Unity.VisualScripting
             collectionsAreValid = false;
         }
 
+        private static readonly Stack<IWidget> widgetTraversalStack = new Stack<IWidget>(128);
+
+        private void PopulateWidgets(WidgetList<IWidget> targetList)
+        {
+            widgetTraversalStack.Clear();
+
+            foreach (var element in graph.elements)
+            {
+                widgetTraversalStack.Push(this.Widget(element));
+            }
+
+            while (widgetTraversalStack.Count > 0)
+            {
+                var current = widgetTraversalStack.Pop();
+                targetList.Add(current);
+
+                foreach (var subWidget in current.subWidgets)
+                {
+                    widgetTraversalStack.Push(subWidget);
+                }
+            }
+        }
+
         public void CacheWidgetCollections()
         {
-            // Dispose widgets that are no longer within the graph
-            // so that they unregister any event handler
             widgetProvider.FreeInvalid();
-
-            // Remove invalid widgets from the drag group
             dragGroup.RemoveWhere(element => !widgetProvider.IsValid(element));
 
-            // Rebuild the widget collection
             widgets.Clear();
-            widgets.AddRange(GetWidgets());
+            PopulateWidgets(widgets);
+
             elementWidgets.Clear();
-            elementWidgets.AddRange(widgets.OfType<IGraphElementWidget>());
+            foreach (var widget in widgets)
+            {
+                if (widget is IGraphElementWidget elementWidget)
+                {
+                    elementWidgets.Add(elementWidget);
+                }
+            }
 
-            // Normalize and cache the z-ordering
             var zIndex = 0;
-
             foreach (var widget in elementWidgets.OrderBy(widget => widget.zIndex))
             {
                 widget.zIndex = zIndex++;
             }
-
             widgetsByAscendingZ.Clear();
 
             // Convoluted way to avoid allocation while sorting
@@ -227,7 +225,7 @@ namespace Unity.VisualScripting
             // Calculate the positions for models that have been repositioned
             CacheWidgetPositions();
 
-            lastFrameTime = DateTime.Now;
+            lastFrameTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
         }
 
         public void OnGUI()
@@ -264,10 +262,13 @@ namespace Unity.VisualScripting
             // Draw the canvas background
             DrawBackground();
 
-            // Draw the widgets
-            DrawWidgetsBackground();
-            DrawWidgetsForeground();
-            DrawWidgetsOverlay();
+            bool isRepaint = e.IsRepaint;
+            foreach (var widget in visibleWidgetsByAscendingZ)
+            {
+                if (isRepaint || widget.backgroundRequiresInput) widget.DrawBackground();
+                if (isRepaint || widget.foregroundRequiresInput) widget.DrawForeground();
+                if (isRepaint || widget.overlayRequiresInput) widget.DrawOverlay();
+            }
 
             // Draw the canvas overlay
             DrawOverlay();
@@ -291,11 +292,11 @@ namespace Unity.VisualScripting
             }
 
             // Update timing for deltas
-            lastEventTime = DateTime.Now;
+            lastEventTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
 
             if (e.IsRepaint)
             {
-                lastRepaintTime = DateTime.Now;
+                lastRepaintTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
             }
         }
 
@@ -730,11 +731,27 @@ namespace Unity.VisualScripting
 
         private readonly List<IWidget> widgetsToReposition = new List<IWidget>();
 
+        private readonly List<IWidget> invalidPositionWidgets = new List<IWidget>();
+
         public void CacheWidgetPositions()
         {
+            invalidPositionWidgets.Clear();
             widgetsToReposition.Clear();
 
-            widgetsToReposition.AddRange(widgets.Where(widget => !widget.isPositionValid).OrderByDependencies(widget => widget.positionDependencies));
+            foreach (var widget in widgets)
+            {
+                if (!widget.isPositionValid)
+                {
+                    invalidPositionWidgets.Add(widget);
+                }
+            }
+
+            if (invalidPositionWidgets.Count == 0)
+            {
+                return;
+            }
+
+            widgetsToReposition.AddRange(invalidPositionWidgets.OrderByDependencies(widget => widget.positionDependencies));
 
             using (LudiqGUI.matrix.Override(Matrix4x4.identity))
             {
@@ -1229,18 +1246,31 @@ namespace Unity.VisualScripting
 
         #region Layout
 
+        private readonly List<IGraphElementWidget> _alignableAndDistributableCache = new List<IGraphElementWidget>(32);
+
         public IEnumerable<IGraphElementWidget> alignableAndDistributable
         {
             get
             {
-                // [BOLT-1112]
-                // Filter elements with a null graph reference as deserialization may occurs while parsing the list.
-                // After deserialization elements are cleaned up before rebuilding the graph.
-                // see Graph.OnAfterDependenciesDeserialized
-                return selection
-                    .Where(element => element.graph != null)
-                    .Select(this.Widget)
-                    .Where(element => element.canAlignAndDistribute);
+                _alignableAndDistributableCache.Clear();
+
+                foreach (var element in selection)
+                {
+                    // [BOLT-1112]
+                    // Filter elements with a null graph reference as deserialization may occurs while parsing the list.
+                    // After deserialization elements are cleaned up before rebuilding the graph.
+                    // see Graph.OnAfterDependenciesDeserialized
+                    if (element.graph != null)
+                    {
+                        var widget = this.Widget(element);
+                        if (widget.canAlignAndDistribute)
+                        {
+                            _alignableAndDistributableCache.Add(widget);
+                        }
+                    }
+                }
+
+                return _alignableAndDistributableCache;
             }
         }
 
@@ -1527,21 +1557,27 @@ namespace Unity.VisualScripting
 
         #region Drag & Drop
 
+        private readonly List<IDragAndDropHandler> _dragAndDropHandlersCache = new List<IDragAndDropHandler>(4);
+
         private IEnumerable<IDragAndDropHandler> potentialDragAndDropHandlers
         {
             get
             {
-                if (hoveredWidget != null && hoveredWidget is IDragAndDropHandler)
+                _dragAndDropHandlersCache.Clear();
+
+                if (hoveredWidget is IDragAndDropHandler handler)
                 {
-                    yield return (IDragAndDropHandler)hoveredWidget;
+                    _dragAndDropHandlersCache.Add(handler);
                 }
 
-                yield return this;
+                _dragAndDropHandlersCache.Add(this);
 
                 foreach (var extension in context.extensions)
                 {
-                    yield return extension;
+                    _dragAndDropHandlersCache.Add(extension);
                 }
+
+                return _dragAndDropHandlersCache;
             }
         }
 
@@ -1614,20 +1650,21 @@ namespace Unity.VisualScripting
 
         #region Timing
 
-        private DateTime lastFrameTime;
+        private long lastFrameTimestamp;
+        private long lastEventTimestamp;
+        private long lastRepaintTimestamp;
 
-        private DateTime lastEventTime;
-
-        private DateTime lastRepaintTime;
-
-        [DoNotSerialize]
-        public float frameDeltaTime => (float)(DateTime.Now - lastFrameTime).TotalSeconds;
+        // Uses a static readonly multiplier to avoid division overhead
+        private static readonly double TimestampToSeconds = 1.0 / System.Diagnostics.Stopwatch.Frequency;
 
         [DoNotSerialize]
-        public float eventDeltaTime => (float)(DateTime.Now - lastEventTime).TotalSeconds;
+        public float frameDeltaTime => (float)((System.Diagnostics.Stopwatch.GetTimestamp() - lastFrameTimestamp) * TimestampToSeconds);
 
         [DoNotSerialize]
-        public float repaintDeltaTime => (float)(DateTime.Now - lastRepaintTime).TotalSeconds;
+        public float eventDeltaTime => (float)((System.Diagnostics.Stopwatch.GetTimestamp() - lastEventTimestamp) * TimestampToSeconds);
+
+        [DoNotSerialize]
+        public float repaintDeltaTime => (float)((System.Diagnostics.Stopwatch.GetTimestamp() - lastRepaintTimestamp) * TimestampToSeconds);
 
         #endregion
 

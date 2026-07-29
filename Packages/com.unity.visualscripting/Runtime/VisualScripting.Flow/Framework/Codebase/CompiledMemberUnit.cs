@@ -6,7 +6,8 @@ namespace Unity.VisualScripting
     {
         public abstract ActionDirection Direction { get; protected set; }
         public abstract Type PseudoDeclaringType { get; protected set; }
-        public abstract string Name { get; protected set; }
+        public abstract string CSharpName { get; protected set; }
+        public abstract string HumanName { get; protected set; }
         public abstract string ActualName { get; protected set; }
         public abstract string Summary { get; protected set; }
         public virtual Type[] ParameterTypes { get; } = null;

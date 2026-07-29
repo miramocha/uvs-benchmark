@@ -92,7 +92,5 @@ namespace Unity.VisualScripting
         protected virtual void OnConfigurationGUI(Rect position)
         {
         }
-
-        protected virtual void Compile() { }
     }
 }

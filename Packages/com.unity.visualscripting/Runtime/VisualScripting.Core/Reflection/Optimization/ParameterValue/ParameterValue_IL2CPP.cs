@@ -292,6 +292,30 @@ namespace Unity.VisualScripting
                 return Unsafe.As<Quaternion, T>(ref val);
             }
 
+            if (TypeTraits<T>.IsVector2Int)
+            {
+                Vector2Int val = ToVector2Int();
+                return Unsafe.As<Vector2Int, T>(ref val);
+            }
+
+            if (TypeTraits<T>.IsVector3Int)
+            {
+                Vector3Int val = ToVector3Int();
+                return Unsafe.As<Vector3Int, T>(ref val);
+            }
+
+            if (TypeTraits<T>.IsRect)
+            {
+                Rect val = ToRect();
+                return Unsafe.As<Rect, T>(ref val);
+            }
+
+            if (TypeTraits<T>.IsRay2D)
+            {
+                Ray2D val = ToRay2D();
+                return Unsafe.As<Ray2D, T>(ref val);
+            }
+
             if (type == ValueType.Object)
             {
                 return ObjectValue.ConvertTo<T>();
@@ -299,7 +323,7 @@ namespace Unity.VisualScripting
 
             return ThrowInvalidCast<T>();
         }
-        
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         public readonly bool IsAssignableFrom(Type type)
         {
@@ -334,12 +358,13 @@ namespace Unity.VisualScripting
                 case ValueType.Bool:
                     return type == Types.Bool || ConversionUtility.CanConvert(Types.Bool, type, true);
 
-                case ValueType.Vector2:
-                    return IsVectorAssignable(type, Types.Vector2);
-                case ValueType.Vector3:
-                    return IsVectorAssignable(type, Types.Vector3);
-                case ValueType.Vector4:
-                    return IsVectorAssignable(type, Types.Vector4);
+                case ValueType.Vector2: return IsVectorAssignable(type, Types.Vector2);
+                case ValueType.Vector3: return IsVectorAssignable(type, Types.Vector3);
+                case ValueType.Vector4: return IsVectorAssignable(type, Types.Vector4);
+                case ValueType.Vector2Int: return IsVectorAssignable(type, Types.Vector2Int);
+                case ValueType.Vector3Int: return IsVectorAssignable(type, Types.Vector3Int);
+                case ValueType.Rect: return IsVectorAssignable(type, Types.Rect);
+                case ValueType.Ray2D: return IsVectorAssignable(type, Types.Ray2D);
 
                 case ValueType.Color:
                     return type == Types.Color || type == Types.Vector4 || ConversionUtility.CanConvert(Types.Color, type, true);
@@ -373,14 +398,16 @@ namespace Unity.VisualScripting
 
         public readonly bool IsAssignableFrom<T>()
         {
-            if (TypeTraits<T>.IsPrimitiveNumericNoDecimal)
+            if (TypeTraits<T>.IsNumeric)
             {
-                return (type >= ValueType.Byte && type <= ValueType.Double) || (type == ValueType.Object && (ObjectValue?.IsConvertibleTo<T>(true) ?? false));
+                return (type >= ValueType.Byte && type <= ValueType.Decimal) || (type == ValueType.Object && (ObjectValue?.IsConvertibleTo<T>(true) ?? false));
             }
 
-            if (TypeTraits<T>.IsVector3 || TypeTraits<T>.IsVector2 || TypeTraits<T>.IsVector4)
+            // Updated Vector/Math block
+            if (TypeTraits<T>.IsVector3 || TypeTraits<T>.IsVector2 || TypeTraits<T>.IsVector4 ||
+                TypeTraits<T>.IsVector2Int || TypeTraits<T>.IsVector3Int || TypeTraits<T>.IsRect || TypeTraits<T>.IsRay2D)
             {
-                return (type >= ValueType.Vector2 && type <= ValueType.Vector4) || ConversionUtility.CanConvert(GetValueType(), TypeTraits<T>.Type, true);
+                return (type >= ValueType.Vector2 && type <= ValueType.Ray2D) || ConversionUtility.CanConvert(GetValueType(), TypeTraits<T>.Type, true);
             }
 
             if (TypeTraits<T>.IsBool) return type == ValueType.Bool || ConversionUtility.CanConvert(GetValueType(), TypeTraits<T>.Type, true);
@@ -413,32 +440,32 @@ namespace Unity.VisualScripting
 
             if (TypeTraits<T>.IsInt)
             {
-                if (type == ValueType.Int) return Unsafe.As<int, T>(ref Unsafe.AsRef(in intValue));
-                int v = CoerceToInt32(); return Unsafe.As<int, T>(ref v);
+                int v = ToInt32();
+                return Unsafe.As<int, T>(ref v);
             }
 
             if (TypeTraits<T>.IsFloat)
             {
-                if (type == ValueType.Float) return Unsafe.As<float, T>(ref Unsafe.AsRef(in floatValue));
-                float v = CoerceToSingle(); return Unsafe.As<float, T>(ref v);
+                float v = ToSingle();
+                return Unsafe.As<float, T>(ref v);
             }
 
             if (TypeTraits<T>.IsBool)
             {
-                if (type == ValueType.Bool) return Unsafe.As<bool, T>(ref Unsafe.AsRef(in boolValue));
-                bool v = CoerceToBool(); return Unsafe.As<bool, T>(ref v);
+                bool v = ToBool();
+                return Unsafe.As<bool, T>(ref v);
             }
 
             if (TypeTraits<T>.IsVector2)
             {
-                if (type == ValueType.Vector2) return Unsafe.As<Vector2, T>(ref Unsafe.AsRef(in vector2Value));
-                Vector2 v = CoerceToVector2(); return Unsafe.As<Vector2, T>(ref v);
+                Vector2 v = ToVector2();
+                return Unsafe.As<Vector2, T>(ref v);
             }
 
             if (TypeTraits<T>.IsVector3)
             {
-                if (type == ValueType.Vector3) return Unsafe.As<Vector3, T>(ref Unsafe.AsRef(in vector3Value));
-                Vector3 v = CoerceToVector3(); return Unsafe.As<Vector3, T>(ref v);
+                Vector3 v = ToVector3();
+                return Unsafe.As<Vector3, T>(ref v);
             }
 
             if (TypeTraits<T>.IsString)
@@ -448,75 +475,105 @@ namespace Unity.VisualScripting
                     object val = ObjectValue;
                     return Unsafe.As<object, T>(ref val);
                 }
-                
+
                 string v = ToString();
                 return Unsafe.As<string, T>(ref v);
             }
 
             if (TypeTraits<T>.IsVector4)
             {
-                if (type == ValueType.Vector4) return Unsafe.As<Vector4, T>(ref Unsafe.AsRef(in vector4Value));
-                Vector4 v = CoerceToVector4(); return Unsafe.As<Vector4, T>(ref v);
+                Vector4 v = ToVector4();
+                return Unsafe.As<Vector4, T>(ref v);
             }
 
             if (TypeTraits<T>.IsColor)
             {
-                if (type == ValueType.Color) return Unsafe.As<Color, T>(ref Unsafe.AsRef(in colorValue));
-                Color v = CoerceToColor(); return Unsafe.As<Color, T>(ref v);
+                Color v = ToColor();
+                return Unsafe.As<Color, T>(ref v);
             }
 
             if (TypeTraits<T>.IsQuaternion)
             {
-                if (type == ValueType.Quaternion) return Unsafe.As<Quaternion, T>(ref Unsafe.AsRef(in quaternionValue));
-                Quaternion v = CoerceToQuaternion(); return Unsafe.As<Quaternion, T>(ref v);
+                Quaternion v = ToQuaternion();
+                return Unsafe.As<Quaternion, T>(ref v);
             }
 
             if (TypeTraits<T>.IsLong)
             {
-                if (type == ValueType.Long) return Unsafe.As<long, T>(ref Unsafe.AsRef(in longValue));
-                long v = CoerceToInt64(); return Unsafe.As<long, T>(ref v);
+                long v = ToInt64();
+                return Unsafe.As<long, T>(ref v);
             }
 
             if (TypeTraits<T>.IsDouble)
             {
-                if (type == ValueType.Double) return Unsafe.As<double, T>(ref Unsafe.AsRef(in doubleValue));
-                double v = CoerceToDouble(); return Unsafe.As<double, T>(ref v);
+                double v = ToDouble();
+                return Unsafe.As<double, T>(ref v);
+            }
+
+            if (TypeTraits<T>.IsDecimal)
+            {
+                decimal v = ToDecimal();
+                return Unsafe.As<decimal, T>(ref v);
             }
 
             if (TypeTraits<T>.IsByte)
             {
-                if (type == ValueType.Byte) return Unsafe.As<byte, T>(ref Unsafe.AsRef(in byteValue));
-                byte v = CoerceToByte(); return Unsafe.As<byte, T>(ref v);
+                byte v = ToByte();
+                return Unsafe.As<byte, T>(ref v);
             }
 
             if (TypeTraits<T>.IsUInt)
             {
-                if (type == ValueType.UInt) return Unsafe.As<uint, T>(ref Unsafe.AsRef(in uintValue));
-                uint v = CoerceToUInt32(); return Unsafe.As<uint, T>(ref v);
+                uint v = ToUInt32();
+                return Unsafe.As<uint, T>(ref v);
             }
 
             if (TypeTraits<T>.IsULong)
             {
-                if (type == ValueType.ULong) return Unsafe.As<ulong, T>(ref Unsafe.AsRef(in ulongValue));
-                ulong v = CoerceToUInt64(); return Unsafe.As<ulong, T>(ref v);
+                ulong v = ToUInt64();
+                return Unsafe.As<ulong, T>(ref v);
             }
 
             if (TypeTraits<T>.IsShort)
             {
-                if (type == ValueType.Short) return Unsafe.As<short, T>(ref Unsafe.AsRef(in shortValue));
-                short v = CoerceToInt16(); return Unsafe.As<short, T>(ref v);
+                short v = ToInt16();
+                return Unsafe.As<short, T>(ref v);
             }
 
             if (TypeTraits<T>.IsUShort)
             {
-                if (type == ValueType.UShort) return Unsafe.As<ushort, T>(ref Unsafe.AsRef(in ushortValue));
-                ushort v = CoerceToUInt16(); return Unsafe.As<ushort, T>(ref v);
+                ushort v = ToUInt16();
+                return Unsafe.As<ushort, T>(ref v);
             }
 
             if (TypeTraits<T>.IsSByte)
             {
-                if (type == ValueType.SByte) return Unsafe.As<sbyte, T>(ref Unsafe.AsRef(in sbyteValue));
-                sbyte v = CoerceToSByte(); return Unsafe.As<sbyte, T>(ref v);
+                sbyte v = ToSByte();
+                return Unsafe.As<sbyte, T>(ref v);
+            }
+
+            if (TypeTraits<T>.IsVector2Int)
+            {
+                Vector2Int v = ToVector2Int();
+                return Unsafe.As<Vector2Int, T>(ref v);
+            }
+
+            if (TypeTraits<T>.IsVector3Int)
+            {
+                Vector3Int v = ToVector3Int();
+                return Unsafe.As<Vector3Int, T>(ref v);
+            }
+
+            if (TypeTraits<T>.IsRect)
+            {
+                Rect v = ToRect();
+                return Unsafe.As<Rect, T>(ref v);
+            }
+
+            if (TypeTraits<T>.IsRay2D)
+            {
+                Ray2D v = ToRay2D();
+                return Unsafe.As<Ray2D, T>(ref v);
             }
 
             return CastObject<T>();
@@ -541,7 +598,6 @@ namespace Unity.VisualScripting
             {
                 return new ParameterValue(Unsafe.As<T, ulong>(ref value));
             }
-
             if (TypeTraits<T>.IsFloat)
             {
                 return new ParameterValue(Unsafe.As<T, float>(ref value));
@@ -550,7 +606,10 @@ namespace Unity.VisualScripting
             {
                 return new ParameterValue(Unsafe.As<T, double>(ref value));
             }
-
+            if (TypeTraits<T>.IsDecimal)
+            {
+                return new ParameterValue(Unsafe.As<T, decimal>(ref value));
+            }
             if (TypeTraits<T>.IsBool)
             {
                 return new ParameterValue(Unsafe.As<T, bool>(ref value));
@@ -571,7 +630,6 @@ namespace Unity.VisualScripting
             {
                 return new ParameterValue(Unsafe.As<T, ushort>(ref value));
             }
-
             if (TypeTraits<T>.IsVector2)
             {
                 return new ParameterValue(Unsafe.As<T, Vector2>(ref value));
@@ -584,6 +642,22 @@ namespace Unity.VisualScripting
             {
                 return new ParameterValue(Unsafe.As<T, Vector4>(ref value));
             }
+            if (TypeTraits<T>.IsVector2Int)
+            {
+                return new ParameterValue(Unsafe.As<T, Vector2Int>(ref value));
+            }
+            if (TypeTraits<T>.IsVector3Int)
+            {
+                return new ParameterValue(Unsafe.As<T, Vector3Int>(ref value));
+            }
+            if (TypeTraits<T>.IsRect)
+            {
+                return new ParameterValue(Unsafe.As<T, Rect>(ref value));
+            }
+            if (TypeTraits<T>.IsRay2D)
+            {
+                return new ParameterValue(Unsafe.As<T, Ray2D>(ref value));
+            }
             if (TypeTraits<T>.IsQuaternion)
             {
                 return new ParameterValue(Unsafe.As<T, Quaternion>(ref value));
@@ -592,7 +666,6 @@ namespace Unity.VisualScripting
             {
                 return new ParameterValue(Unsafe.As<T, Color>(ref value));
             }
-
             if (TypeTraits<T>.IsString)
             {
                 return new ParameterValue(Unsafe.As<T, string>(ref value));
@@ -614,10 +687,15 @@ namespace Unity.VisualScripting
             ValueType.ULong => Types.ULong,
             ValueType.Float => Types.Float,
             ValueType.Double => Types.Double,
+            ValueType.Decimal => Types.Decimal,
             ValueType.Bool => Types.Bool,
             ValueType.Vector2 => Types.Vector2,
             ValueType.Vector3 => Types.Vector3,
             ValueType.Vector4 => Types.Vector4,
+            ValueType.Vector2Int => Types.Vector2Int,
+            ValueType.Vector3Int => Types.Vector3Int,
+            ValueType.Rect => Types.Rect,
+            ValueType.Ray2D => Types.Ray2D,
             ValueType.Quaternion => Types.Quaternion,
             ValueType.Color => Types.Color,
             ValueType.String => Types.String,
@@ -634,6 +712,7 @@ namespace Unity.VisualScripting
             public static readonly Type Int = typeof(int);
             public static readonly Type Float = typeof(float);
             public static readonly Type Double = typeof(double);
+            public static readonly Type Decimal = typeof(decimal);
             public static readonly Type Byte = typeof(byte);
             public static readonly Type SByte = typeof(sbyte);
             public static readonly Type Short = typeof(short);
@@ -645,6 +724,10 @@ namespace Unity.VisualScripting
             public static readonly Type Vector2 = typeof(Vector2);
             public static readonly Type Vector3 = typeof(Vector3);
             public static readonly Type Vector4 = typeof(Vector4);
+            public static readonly Type Vector2Int = typeof(Vector2Int);
+            public static readonly Type Vector3Int = typeof(Vector3Int);
+            public static readonly Type Rect = typeof(Rect);
+            public static readonly Type Ray2D = typeof(Ray2D);
             public static readonly Type Color = typeof(Color);
             public static readonly Type Quaternion = typeof(Quaternion);
             public static readonly Type String = typeof(string);

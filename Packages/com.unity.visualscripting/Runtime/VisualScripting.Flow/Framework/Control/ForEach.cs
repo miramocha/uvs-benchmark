@@ -79,7 +79,7 @@ namespace Unity.VisualScripting
 
         protected override ControlOutput Loop(Flow flow)
         {
-            var rawCollection = flow.GetValueData(collection).ToObject();
+            var rawCollection = flow.GetValue(collection);
             if (rawCollection == null) return exit;
 
             var loop = flow.EnterLoop();
@@ -88,14 +88,22 @@ namespace Unity.VisualScripting
 
             try
             {
-                if (dictionary && rawCollection is IDictionary dict)
+                if (dictionary)
                 {
-                    enumerator = dict.GetEnumerator();
-                    LoopDictionary(flow, loop, stack, (IDictionaryEnumerator)enumerator);
+                    if (rawCollection is AotDictionary aotDictionary)
+                        LoopDictionary(flow, loop, stack, aotDictionary);
+                    else if (rawCollection is IDictionary dict)
+                    {
+                        enumerator = dict.GetEnumerator();
+                        LoopDictionary(flow, loop, stack, (IDictionaryEnumerator)enumerator);
+                    }
                 }
-                else if (!dictionary && rawCollection is IList list)
+                else if (!dictionary)
                 {
-                    LoopList(flow, loop, stack, list);
+                    if (rawCollection is AotList aotList)
+                        LoopList(flow, loop, stack, aotList);
+                    else if (rawCollection is IList ilist)
+                        LoopList(flow, loop, stack, ilist);
                 }
                 else if (rawCollection is IEnumerable enumerable)
                 {
@@ -141,7 +149,50 @@ namespace Unity.VisualScripting
             }
         }
 
+        private void LoopDictionary(Flow flow, int loop, GraphStack stack, AotDictionary dict)
+        {
+            int index = 0;
+
+            var keyItem = new ParameterValue((object)null);
+            var valueItem = new ParameterValue((object)null);
+
+            flow.SetValue(currentKey, keyItem);
+            flow.SetValue(currentItem, valueItem);
+            foreach (DictionaryEntry item in dict)
+            {
+                if (!flow.LoopIsNotBroken(loop)) break;
+
+                keyItem.UpdateObject(item.Key);
+                valueItem.UpdateObject(item.Value);
+                flow.SetValue(currentIndex, index);
+
+                flow.Invoke(body);
+                flow.RestoreStack(stack);
+
+                index++;
+            }
+        }
+
         private void LoopList(Flow flow, int loop, GraphStack stack, IList list)
+        {
+            int count = list.Count;
+
+            var item = new ParameterValue(list.Count > 0 ? list[0] : null);
+            flow.SetValue(currentItem, item);
+
+            for (int index = 0; index < count; index++)
+            {
+                if (!flow.LoopIsNotBroken(loop)) break;
+
+                item.UpdateObject(list[index]);
+                flow.SetValue(currentIndex, index);
+
+                flow.Invoke(body);
+                flow.RestoreStack(stack);
+            }
+        }
+
+        private void LoopList(Flow flow, int loop, GraphStack stack, AotList list)
         {
             int count = list.Count;
 
@@ -196,45 +247,91 @@ namespace Unity.VisualScripting
 
             try
             {
-                if (dictionary && rawCollection is IDictionary dict)
+                if (dictionary)
                 {
-                    var dictEnum = dict.GetEnumerator();
-                    enumerator = dictEnum;
-
-                    var keyItem = new ParameterValue((object)null);
-                    var valueItem = new ParameterValue((object)null);
-                    flow.SetValue(currentKey, keyItem);
-                    flow.SetValue(currentItem, valueItem);
-
-                    while (flow.LoopIsNotBroken(loop) && dictEnum.MoveNext())
+                    if (rawCollection is AotDictionary aotDictionary)
                     {
-                        keyItem.UpdateObject(dictEnum.Key);
-                        valueItem.UpdateObject(dictEnum.Value);
-                        flow.SetValue(currentIndex, index);
+                        var keyItem = new ParameterValue((object)null);
+                        var valueItem = new ParameterValue((object)null);
+                        flow.SetValue(currentKey, keyItem);
+                        flow.SetValue(currentItem, valueItem);
 
-                        yield return body;
+                        foreach (DictionaryEntry item in aotDictionary)
+                        {
+                            if (!flow.LoopIsNotBroken(loop)) break;
 
-                        flow.RestoreStack(stack);
-                        index++;
+                            keyItem.UpdateObject(item.Key);
+                            valueItem.UpdateObject(item.Value);
+                            flow.SetValue(currentIndex, index);
+
+                            yield return body;
+
+                            flow.RestoreStack(stack);
+                            index++;
+                        }
+                    }
+                    else if (rawCollection is IDictionary dict)
+                    {
+                        var dictEnum = dict.GetEnumerator();
+                        enumerator = dictEnum;
+
+                        var keyItem = new ParameterValue((object)null);
+                        var valueItem = new ParameterValue((object)null);
+                        flow.SetValue(currentKey, keyItem);
+                        flow.SetValue(currentItem, valueItem);
+
+                        while (flow.LoopIsNotBroken(loop) && dictEnum.MoveNext())
+                        {
+                            keyItem.UpdateObject(dictEnum.Key);
+                            valueItem.UpdateObject(dictEnum.Value);
+                            flow.SetValue(currentIndex, index);
+
+                            yield return body;
+
+                            flow.RestoreStack(stack);
+                            index++;
+                        }
                     }
                 }
-                else if (!dictionary && rawCollection is IList list)
+                else if (!dictionary)
                 {
-                    int count = list.Count;
-
-                    var item = new ParameterValue(list.Count > 0 ? list[0] : null);
-                    flow.SetValue(currentItem, item);
-
-                    for (index = 0; index < count; index++)
+                    if (rawCollection is AotList aotlist)
                     {
-                        if (!flow.LoopIsNotBroken(loop)) break;
+                        int count = aotlist.Count;
 
-                        item.UpdateObject(list[index]);
-                        flow.SetValue(currentIndex, index);
+                        var item = new ParameterValue(aotlist.Count > 0 ? aotlist[0] : null);
+                        flow.SetValue(currentItem, item);
 
-                        yield return body;
+                        for (index = 0; index < count; index++)
+                        {
+                            if (!flow.LoopIsNotBroken(loop)) break;
 
-                        flow.RestoreStack(stack);
+                            item.UpdateObject(aotlist[index]);
+                            flow.SetValue(currentIndex, index);
+
+                            yield return body;
+
+                            flow.RestoreStack(stack);
+                        }
+                    }
+                    else if (rawCollection is IList ilist)
+                    {
+                        int count = ilist.Count;
+
+                        var item = new ParameterValue(ilist.Count > 0 ? ilist[0] : null);
+                        flow.SetValue(currentItem, item);
+
+                        for (index = 0; index < count; index++)
+                        {
+                            if (!flow.LoopIsNotBroken(loop)) break;
+
+                            item.UpdateObject(ilist[index]);
+                            flow.SetValue(currentIndex, index);
+
+                            yield return body;
+
+                            flow.RestoreStack(stack);
+                        }
                     }
                 }
                 else if (rawCollection is IEnumerable enumerable)

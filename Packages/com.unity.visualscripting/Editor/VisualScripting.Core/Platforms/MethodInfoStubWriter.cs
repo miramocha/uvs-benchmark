@@ -12,6 +12,16 @@ namespace Unity.VisualScripting
 
         public override IEnumerable<CodeStatement> GetStubStatements()
         {
+            /*
+             * Required output:
+             * 1. Create a target expression
+             * 2. Call its method with the correct number of args (incl. unary/binary operators)
+             * 3. Instantiate the optimized invoker
+             * 4. Call optimized method with standard correct number of typed args
+             * 5. Call optimized method with ParameterValue arguments (Ref or Standard)
+             * 6. Call optimized method with an object[] args array
+            */
+
             var targetType = new CodeTypeReference(manipulator.targetType, CodeTypeReferenceOptions.GlobalReference);
             var declaringType = new CodeTypeReference(stub.DeclaringType, CodeTypeReferenceOptions.GlobalReference);
             var pvType = new CodeTypeReference(typeof(ParameterValue), CodeTypeReferenceOptions.GlobalReference);
@@ -24,18 +34,22 @@ namespace Unity.VisualScripting
 
             if (manipulator.requiresTarget && !manipulator.isExtension)
             {
+                // default(Material)
                 targetValue = new CodeDefaultValueExpression(targetType);
+                // Material target = default(Material);
                 yield return new CodeVariableDeclarationStatement(targetType, "target", targetValue);
                 targetReference = new CodeVariableReferenceExpression("target");
             }
             else
             {
+                // null
                 targetValue = new CodePrimitiveExpression(null);
                 targetReference = manipulator.isExtension
                     ? (CodeExpression)new CodeTypeReferenceExpression(declaringType)
                     : new CodeTypeReferenceExpression(targetType);
             }
 
+            // target.SetColor
             var methodReference = new CodeMethodReferenceExpression(targetReference, manipulator.name);
             var arguments = new List<CodeExpression>();
             var includesOutOrRef = false;
@@ -45,16 +59,26 @@ namespace Unity.VisualScripting
                 var parameterType = new CodeTypeReference(parameterInfo.UnderlyingParameterType(), CodeTypeReferenceOptions.GlobalReference);
                 var argumentName = $"arg{arguments.Count}";
 
+                // arg0 = default(string)
                 yield return new CodeVariableDeclarationStatement(parameterType, argumentName, new CodeDefaultValueExpression(parameterType));
 
                 FieldDirection direction = FieldDirection.In;
-                if (parameterInfo.HasOutModifier()) { direction = FieldDirection.Out; includesOutOrRef = true; }
-                else if (parameterInfo.ParameterType.IsByRef && !parameterInfo.IsIn) { direction = FieldDirection.Ref; includesOutOrRef = true; }
+
+                if (parameterInfo.HasOutModifier())
+                {
+                    direction = FieldDirection.Out;
+                    includesOutOrRef = true;
+                }
+                else if (parameterInfo.ParameterType.IsByRef && !parameterInfo.IsIn)
+                {
+                    direction = FieldDirection.Ref;
+                    includesOutOrRef = true;
+                }
 
                 arguments.Add(new CodeDirectionExpression(direction, new CodeVariableReferenceExpression(argumentName)));
             }
 
-            // 2. Call its method
+            // 2. Call its method / Operators
             if (UnaryOperators.TryGetValue(manipulator.name, out var unarySymbol))
             {
                 var argRef = (CodeDirectionExpression)arguments[0];
@@ -64,15 +88,18 @@ namespace Unity.VisualScripting
             }
             else if (operatorTypes.TryGetValue(manipulator.name, out var binaryOp))
             {
+                // arg0 * arg1
                 var operation = new CodeBinaryOperatorExpression(arguments[0], binaryOp, arguments[1]);
                 yield return new CodeVariableDeclarationStatement(manipulator.type, "op", operation);
             }
             else if (manipulator.isConversion)
             {
+                // (Vector3)arg0
                 yield return new CodeVariableDeclarationStatement(manipulator.type, "conversion", new CodeCastExpression(manipulator.type, arguments[0]));
             }
             else if (manipulator.isPubliclyInvocable)
             {
+                // target.SetColor(arg0, arg1);
                 yield return new CodeExpressionStatement(new CodeMethodInvokeExpression(methodReference, arguments.ToArray()));
             }
 
@@ -85,6 +112,7 @@ namespace Unity.VisualScripting
                 new CodeDefaultValueExpression(new CodeTypeReference(typeof(MethodInfo), CodeTypeReferenceOptions.GlobalReference))
             };
 
+            // Setup Delegate Compatibility fallback for ReflectionInvoker
             if (optimzedInvoker is ReflectionInvoker)
             {
                 constructorArgs.Add(new CodeFieldReferenceExpression(
@@ -99,25 +127,32 @@ namespace Unity.VisualScripting
             );
 
             var optimizedRef = new CodeVariableReferenceExpression("optimized");
+
             bool isStructInstance = manipulator.targetType.IsValueType && !stub.IsStatic;
+            bool isStaticClass = manipulator.targetType.IsStatic();
 
             // Use default(T) for ParameterValue.Create to ensure correct AOT overload resolution
-            bool isStaticClass = manipulator.targetType.IsStatic();
             CodeExpression pvTargetDefault = isStaticClass
                 ? (CodeExpression)new CodeFieldReferenceExpression(pvTypeExpression, "None")
                 : new CodeDefaultValueExpression(targetType);
 
-            // Call optimized method with ParameterValue overloads
+            // Ref and out parameters are not supported in the numbered argument signatures
             if (!includesOutOrRef)
             {
+                // 4. Call standard typed arguments
+                // [default(Material), arg0, arg1]
+                var argumentsWithTarget = targetValue.Yield().Concat(arguments).ToArray();
+                yield return new CodeExpressionStatement(new CodeMethodInvokeExpression(optimizedRef, nameof(OptimizedInvokerBase.Invoke), argumentsWithTarget));
+
+                // 5. Call optimized method with ParameterValue overloads
+                var pvArgs = stub.GetParameters().Select((p, i) =>
+                    (CodeExpression)new CodeMethodInvokeExpression(pvTypeExpression, "Create",
+                    new CodeDefaultValueExpression(new CodeTypeReference(p.UnderlyingParameterType(), CodeTypeReferenceOptions.GlobalReference)))).ToList();
+
                 if (isStructInstance)
                 {
                     yield return new CodeVariableDeclarationStatement(pvType, "pvTarget", new CodeMethodInvokeExpression(pvTypeExpression, "Create", pvTargetDefault));
                     var pvTargetRef = new CodeDirectionExpression(FieldDirection.Ref, new CodeVariableReferenceExpression("pvTarget"));
-
-                    var pvArgs = stub.GetParameters().Select((p, i) =>
-                        (CodeExpression)new CodeMethodInvokeExpression(pvTypeExpression, "Create",
-                        new CodeDefaultValueExpression(new CodeTypeReference(p.UnderlyingParameterType(), CodeTypeReferenceOptions.GlobalReference)))).ToList();
 
                     var invokeRefArgs = new[] { pvTargetRef }.Concat(pvArgs).ToArray();
                     yield return new CodeExpressionStatement(new CodeMethodInvokeExpression(optimizedRef, nameof(OptimizedInvokerBase.InvokeRef), invokeRefArgs));
@@ -126,19 +161,35 @@ namespace Unity.VisualScripting
                 {
                     var pvTarget = new CodeMethodInvokeExpression(pvTypeExpression, "Create", pvTargetDefault);
 
-                    var pvArgs = stub.GetParameters().Select((p, i) =>
-                        (CodeExpression)new CodeMethodInvokeExpression(pvTypeExpression, "Create",
-                        new CodeDefaultValueExpression(new CodeTypeReference(p.UnderlyingParameterType(), CodeTypeReferenceOptions.GlobalReference)))).ToList();
-
                     var invokeArgs = new[] { pvTarget }.Concat(pvArgs).ToArray();
                     yield return new CodeExpressionStatement(new CodeMethodInvokeExpression(optimizedRef, nameof(OptimizedInvokerBase.Invoke), invokeArgs));
                 }
             }
 
+            // 6. Call optimized method with Span<ParameterValue>
+            var spanPvType = new CodeTypeReference(typeof(System.Span<ParameterValue>), CodeTypeReferenceOptions.GlobalReference);
+
+            if (isStructInstance)
+            {
+                // Declare a ParameterValue variable so we can pass it by ref to InvokeRef
+                yield return new CodeVariableDeclarationStatement(pvType, "pvTargetSpan", new CodeMethodInvokeExpression(pvTypeExpression, "Create", pvTargetDefault));
+                var pvTargetSpanRef = new CodeDirectionExpression(FieldDirection.Ref, new CodeVariableReferenceExpression("pvTargetSpan"));
+
+                yield return new CodeExpressionStatement(new CodeMethodInvokeExpression(optimizedRef, nameof(OptimizedInvokerBase.InvokeRef),
+                    pvTargetSpanRef, new CodeDefaultValueExpression(spanPvType)));
+            }
+            else
+            {
+                var pvTargetSpan = new CodeMethodInvokeExpression(pvTypeExpression, "Create", pvTargetDefault);
+
+                yield return new CodeExpressionStatement(new CodeMethodInvokeExpression(optimizedRef, nameof(OptimizedInvokerBase.Invoke),
+                    pvTargetSpan, new CodeDefaultValueExpression(spanPvType)));
+            }
+
+            // 7. Call optimized method with an args array (object[])
             if (isStructInstance)
             {
                 yield return new CodeVariableDeclarationStatement(objectType, "objTarget", pvTargetDefault);
-
                 var objTargetRef = new CodeVariableReferenceExpression("objTarget");
 
                 yield return new CodeExpressionStatement(new CodeMethodInvokeExpression(optimizedRef, nameof(OptimizedInvokerBase.Invoke),

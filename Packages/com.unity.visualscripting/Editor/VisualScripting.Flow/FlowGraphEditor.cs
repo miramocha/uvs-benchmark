@@ -8,14 +8,20 @@ namespace Unity.VisualScripting
     [Editor(typeof(FlowGraph))]
     public class FlowGraphEditor : GraphEditor
     {
-        public FlowGraphEditor(Metadata metadata) : base(metadata) { }
+        public FlowGraphEditor(Metadata metadata) : base(metadata)
+        {
+            controlInputDefinitionsMetadata = metadata[nameof(FlowGraph.controlInputDefinitions)];
+            controlOutputDefinitionsMetadata = metadata[nameof(FlowGraph.controlOutputDefinitions)];
+            valueInputDefinitionsMetadata = metadata[nameof(FlowGraph.valueInputDefinitions)];
+            valueOutputDefinitionsMetadata = metadata[nameof(FlowGraph.valueOutputDefinitions)];
+        }
 
         private new FlowGraph graph => (FlowGraph)base.graph;
 
-        private Metadata controlInputDefinitionsMetadata => metadata[nameof(FlowGraph.controlInputDefinitions)];
-        private Metadata controlOutputDefinitionsMetadata => metadata[nameof(FlowGraph.controlOutputDefinitions)];
-        private Metadata valueInputDefinitionsMetadata => metadata[nameof(FlowGraph.valueInputDefinitions)];
-        private Metadata valueOutputDefinitionsMetadata => metadata[nameof(FlowGraph.valueOutputDefinitions)];
+        private readonly Metadata controlInputDefinitionsMetadata;
+        private readonly Metadata controlOutputDefinitionsMetadata;
+        private readonly Metadata valueInputDefinitionsMetadata;
+        private readonly Metadata valueOutputDefinitionsMetadata;
 
         private IEnumerable<Warning> warnings => UnitPortDefinitionUtility.Warnings((FlowGraph)metadata.value);
 

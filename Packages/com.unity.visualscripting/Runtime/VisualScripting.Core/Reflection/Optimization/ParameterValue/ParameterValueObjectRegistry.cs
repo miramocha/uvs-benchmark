@@ -2,9 +2,8 @@ using System;
 using System.Runtime.CompilerServices;
 #if UNITY_6000_6_OR_NEWER
 using Unity.Scripting.LifecycleManagement;
-using UnityEditor;
-
 #endif
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -86,38 +85,30 @@ namespace Unity.VisualScripting
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void Free(int handle)
         {
-            if ((uint)handle > IndexMask) return;
+            if (handle < 0) return;
 
-            int[] nextFreeIndices = null;
-            if (freeCount >= FreeIndices.Length)
-            {
-                nextFreeIndices = new int[FreeIndices.Length * 2];
-            }
+            int index = handle & IndexMask;
+            int pageIdx = index >> PageShift;
+            int slotIdx = index & SlotMask;
+
+            if ((uint)pageIdx >= MaxPages || Pages[pageIdx] == null) return;
 
             lock (WriteLock)
             {
-                int pageIdx = handle >> PageShift;
-                var page = Pages[pageIdx];
-                if (page == null) return;
+                if (Pages[pageIdx] == null) return;
 
-                int slotIdx = handle & SlotMask;
-
-                if (page[slotIdx] != null)
+                if (freeCount >= FreeIndices.Length)
                 {
-                    page[slotIdx] = null;
-                    PageActiveCounts[pageIdx]--;
-
-                    if (freeCount >= FreeIndices.Length)
-                    {
-                        Array.Copy(FreeIndices, nextFreeIndices, FreeIndices.Length);
-                        FreeIndices = nextFreeIndices;
-                    }
-
-                    FreeIndices[freeCount++] = handle;
+                    var nextFreeIndices = new int[FreeIndices.Length * 2];
+                    Array.Copy(FreeIndices, nextFreeIndices, FreeIndices.Length);
+                    FreeIndices = nextFreeIndices;
                 }
+
+                Pages[pageIdx][slotIdx] = null;
+                PageActiveCounts[pageIdx]--;
+                FreeIndices[freeCount++] = index;
             }
         }
-
         public static void TrimExcess()
         {
             lock (WriteLock)
@@ -147,13 +138,14 @@ namespace Unity.VisualScripting
 #if UNITY_6000_6_OR_NEWER
         [OnCodeInitializing]
 #elif UNITY_EDITOR
-        [InitializeOnEnterPlayMode]
+        [InitializeOnLoadMethod]
 #else
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
 #endif
         private static void OnSubsystemInit()
         {
             Purge();
+
             SceneManager.sceneUnloaded -= OnSceneUnloaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
         }

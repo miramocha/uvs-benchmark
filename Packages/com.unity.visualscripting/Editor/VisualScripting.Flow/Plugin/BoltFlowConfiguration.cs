@@ -77,6 +77,14 @@ namespace Unity.VisualScripting
 
 Note: This feature is entirely stripped out of standalone builds, ensuring zero impact on your final game's performance.";
 
+        public const string RecursionSafetyTooltip = @"Enables whether the flow does extra checks to find infinite recursions. 
+This avoids crashing if there is but the flow is much slower
+• None: Recursion safety is turned off completely.
+• Editor: Recursion safety inside the editor only (Recommended).
+• Build: Recursion safety inside a build only.
+• Editor/Build: Recursion safety inside the editor and builds.
+";
+
         /// <summary>
         /// Determines whether flow execution information is displayed in the Graph window.
         /// </summary>
@@ -93,6 +101,10 @@ Note: This feature is entirely stripped out of standalone builds, ensuring zero 
         [InspectorLabel("Flow Debugging", FlowDebuggingTooltip)]
         public Flow.FlowDebuggingMode flowDebugging { get; set; } = Flow.FlowDebuggingMode.Enabled;
 
+        [ProjectSetting(visible = false, resettable = true)]
+        [InspectorLabel("Flow Recursion Safety", RecursionSafetyTooltip)]
+        public Flow.FlowRecursionSafety flowRecursionSafety { get; set; } = Flow.FlowRecursionSafety.Editor;
+
         [ProjectSetting(visible = false, resettable = false)]
         public HashSet<string> favoriteUnitOptions { get; set; } = new HashSet<string>();
 
@@ -101,6 +113,23 @@ Note: This feature is entirely stripped out of standalone builds, ensuring zero 
             base.LateInitialize();
 
             Flow.debuggingMode = flowDebugging;
+
+            bool enableEditorDefine = flowRecursionSafety == Flow.FlowRecursionSafety.Editor || flowRecursionSafety == Flow.FlowRecursionSafety.EditorAndBuild;
+
+            bool enableBuildDefine = flowRecursionSafety == Flow.FlowRecursionSafety.Build || flowRecursionSafety == Flow.FlowRecursionSafety.EditorAndBuild;
+
+            bool editorEnabled = ScriptingDefineUtility.IsDefineEnabled(ScriptingDefineUtility.EditorRecursionSymbol);
+            bool buildEnabled = ScriptingDefineUtility.IsDefineEnabled(ScriptingDefineUtility.BuildRecursionSymbol);
+
+            if (enableEditorDefine != editorEnabled)
+            {
+                ScriptingDefineUtility.SetDefine(ScriptingDefineUtility.EditorRecursionSymbol, enableEditorDefine);
+            }
+
+            if (enableBuildDefine != buildEnabled)
+            {
+                ScriptingDefineUtility.SetDefine(ScriptingDefineUtility.BuildRecursionSymbol, enableBuildDefine);
+            }
         }
     }
 }
