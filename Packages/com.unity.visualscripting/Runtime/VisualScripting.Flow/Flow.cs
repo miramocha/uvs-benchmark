@@ -950,6 +950,13 @@ namespace Unity.VisualScripting
             existing = value;
         }
 
+        // Track a object ID of a ParameterValue which will be free when the Flow is disposed.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void TrackObjectID(int id)
+        {
+            usedIDs.Add(id);
+        }
+
         [MethodImpl(MethodImplOptions.NoInlining)]
         public ParameterValue GetValueData(ValueInput input)
         {

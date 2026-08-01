@@ -469,7 +469,10 @@ namespace Unity.VisualScripting
             for (int i = 0; i < parameterCount; i++)
             {
                 var output = outputParameters[i];
-                if (output != null) flow.SetValue(output, arguments[i]);
+                var arg = arguments[i];
+
+                if (arg.UsesObjectID) flow.TrackObjectID(arg.objectID);
+                if (output != null) flow.SetValue(output, in arg);
             }
 
             return res;

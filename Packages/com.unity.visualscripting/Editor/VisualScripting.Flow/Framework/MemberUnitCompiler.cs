@@ -126,7 +126,20 @@ namespace Unity.VisualScripting
             {
                 sb.AppendLine("        [Preserve]");
                 if (member.parameterTypes.Length > 0)
-                    sb.AppendLine($"        public override Type[] ParameterTypes => new Type[] {{ {string.Join(", ", member.parameterTypes.Select(t => $"typeof({GetTypeCSharpString(t)})"))} }};");
+                {
+                    static string FormatType(Type t)
+                    {
+                        Type targetType = t.IsByRef ? t.GetElementType() : t;
+                        string typeStr = $"typeof({GetTypeCSharpString(targetType)})";
+
+                        if (t.IsByRef) return $"{typeStr}.MakeByRefType()";
+                        if (t.IsPointer) return $"{typeStr}.MakePointerType()";
+                        return typeStr;
+                    }
+
+                    string typesList = string.Join(", ", member.parameterTypes.Select(FormatType));
+                    sb.AppendLine($"        public override Type[] ParameterTypes => new Type[] {{ {typesList} }};");
+                }
                 else
                     sb.AppendLine($"        public override Type[] ParameterTypes => new Type[0];");
 
@@ -313,7 +326,14 @@ namespace Unity.VisualScripting
                 var parameters = member.GetParameterInfos().ToArray();
                 foreach (var p in parameters)
                 {
-                    string pTypeStr = GetTypeCSharpString(p.ParameterType.IsByRef ? p.ParameterType.GetElementType() : p.ParameterType);
+                    Type rawType = p.ParameterType;
+
+                    if (rawType.IsByRef || rawType.IsPointer)
+                    {
+                        rawType = rawType.GetElementType();
+                    }
+
+                    string pTypeStr = GetTypeCSharpString(rawType);
                     if (!p.HasOutModifier())
                     {
                         string allowsNullStr = p.AllowsNull() ? ".AllowsNull()" : "";
@@ -451,10 +471,16 @@ namespace Unity.VisualScripting
                 StringBuilder fetchInputsSB = new StringBuilder();
                 foreach (var p in parameters)
                 {
-                    var pType = p.ParameterType.IsByRef ? p.ParameterType.GetElementType() : p.ParameterType;
-                    string pTypeStr = GetTypeCSharpString(pType);
+                    Type rawType = p.ParameterType;
+
+                    if (rawType.IsByRef || rawType.IsPointer)
+                    {
+                        rawType = rawType.GetElementType();
+                    }
+
+                    string pTypeStr = GetTypeCSharpString(rawType);
                     if (!p.IsOut)
-                        fetchInputsSB.AppendLine($"            var local_{p.Name} = flow{GetValueString(pType, p.Name)};");
+                        fetchInputsSB.AppendLine($"            var local_{p.Name} = flow{GetValueString(rawType, p.Name)};");
                     else
                         fetchInputsSB.AppendLine($"            {pTypeStr} local_{p.Name};");
                 }

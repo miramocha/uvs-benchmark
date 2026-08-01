@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -37,30 +38,55 @@ namespace Unity.VisualScripting
                 ParameterExpression argsExp = Expression.Parameter(typeof(object[]), "args");
 
                 ParameterInfo[] paramsInfo = methodInfo.GetParameters();
-                Expression[] convertedArgs = new Expression[paramsInfo.Length];
+
+                List<Expression> blockExpressions = new List<Expression>();
+                List<ParameterExpression> tempVariables = new List<ParameterExpression>();
+                Expression[] callArgs = new Expression[paramsInfo.Length];
 
                 for (int i = 0; i < paramsInfo.Length; i++)
                 {
+                    Type paramType = paramsInfo[i].ParameterType;
+
+                    Type elementType = paramType.IsByRef ? paramType.GetElementType() : paramType;
+
+                    ParameterExpression tempVar = Expression.Variable(elementType, $"arg_{i}");
+                    tempVariables.Add(tempVar);
+
                     BinaryExpression indexExp = Expression.ArrayIndex(argsExp, Expression.Constant(i));
-                    convertedArgs[i] = Expression.Convert(indexExp, paramsInfo[i].ParameterType);
+                    blockExpressions.Add(Expression.Assign(tempVar, Expression.Convert(indexExp, elementType)));
+
+                    callArgs[i] = tempVar;
                 }
 
                 Expression castTarget = methodInfo.IsStatic ? null : Expression.Convert(targetExp, methodInfo.DeclaringType);
-                MethodCallExpression callExp = Expression.Call(castTarget, methodInfo, convertedArgs);
 
-                Expression body;
+                MethodCallExpression callExp = Expression.Call(castTarget, methodInfo, callArgs);
+
+                ParameterExpression resultVar = null;
 
                 if (methodInfo.ReturnType == typeof(void))
                 {
-                    body = Expression.Block(
-                        callExp,
-                        Expression.Constant(null, typeof(object))
-                    );
+                    blockExpressions.Add(callExp);
                 }
                 else
                 {
-                    body = Expression.Convert(callExp, typeof(object));
+                    resultVar = Expression.Variable(typeof(object), "result");
+                    tempVariables.Add(resultVar);
+                    blockExpressions.Add(Expression.Assign(resultVar, Expression.Convert(callExp, typeof(object))));
                 }
+
+                for (int i = 0; i < paramsInfo.Length; i++)
+                {
+                    if (paramsInfo[i].ParameterType.IsByRef)
+                    {
+                        IndexExpression arrayAccess = Expression.ArrayAccess(argsExp, Expression.Constant(i));
+                        blockExpressions.Add(Expression.Assign(arrayAccess, Expression.Convert(tempVariables[i], typeof(object))));
+                    }
+                }
+
+                blockExpressions.Add(resultVar != null ? resultVar : Expression.Constant(null, typeof(object)));
+
+                BlockExpression body = Expression.Block(tempVariables, blockExpressions);
 
                 invoker = Expression.Lambda<Func<object, object[], object>>(body, targetExp, argsExp).Compile();
             }
@@ -178,6 +204,9 @@ namespace Unity.VisualScripting
             return methodInfo.Invoke(ConvertTarget(target), args);
         }
 
+        /// <summary>
+        /// NOTE: ByRef parameters create ParameterValue's using object make sure to free their handles when finished
+        /// </summary>
         public override ParameterValue Invoke(ParameterValue target, Span<ParameterValue> args)
         {
             object[] localArgs = threadArgs.Value;
@@ -192,6 +221,11 @@ namespace Unity.VisualScripting
                 object result = invoker != null
                     ? invoker(boxedTarget, localArgs)
                     : methodInfo.Invoke(boxedTarget, localArgs);
+
+                for (int i = 0; i < count; i++)
+                {
+                    args[i] = new ParameterValue(localArgs[i]);
+                }
 
                 return new ParameterValue(result);
             }

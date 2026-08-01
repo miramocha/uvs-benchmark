@@ -71,7 +71,7 @@ namespace Unity.VisualScripting
             get
             {
                 EnsureInitialized();
-                return CompiledNamespace + "." + compiledClassName.Replace(".", string.Empty) + CompiledAssemblyQualifiedName;
+                return CompiledNamespace + "." + compiledClassName?.Replace(".", string.Empty) + CompiledAssemblyQualifiedName;
             }
         }
 
