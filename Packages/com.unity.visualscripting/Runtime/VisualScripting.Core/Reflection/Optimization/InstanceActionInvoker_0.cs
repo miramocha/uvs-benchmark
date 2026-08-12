@@ -85,7 +85,7 @@ namespace Unity.VisualScripting
         private ParameterValue InvokeUnsafe(ParameterValue target)
         {
             invoke.Invoke(target.Cast<TTarget>());
-            return ParameterValue.None;
+            return ParameterValue.Null;
         }
 
         protected override Type[] GetParameterTypes()

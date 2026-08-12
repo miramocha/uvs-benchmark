@@ -94,7 +94,7 @@ namespace Unity.VisualScripting
         {
             invoke.Invoke(arg0.Cast<TParam0>());
 
-            return ParameterValue.None;
+            return ParameterValue.Null;
         }
 
         protected override Type[] GetParameterTypes()

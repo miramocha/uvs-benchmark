@@ -55,14 +55,14 @@ namespace Unity.VisualScripting
                 if (canUnbox)
                 {
                     invoke(ref t);
-                    return ParameterValue.None;
+                    return ParameterValue.Null;
                 }
 
                 if (target.IsBoxedNumeric)
                 {
                     TTarget converted = target.AsNumeric<TTarget>();
                     invoke(ref converted);
-                    return ParameterValue.None;
+                    return ParameterValue.Null;
                 }
             }
 
@@ -72,7 +72,7 @@ namespace Unity.VisualScripting
             invoke(ref tempTarget);
             target = ParameterValue.Create(tempTarget);
 
-            return ParameterValue.None;
+            return ParameterValue.Null;
         }
 
         protected override void CreateDelegate() => invoke = (ActionRef)methodInfo.CreateDelegate(typeof(ActionRef));

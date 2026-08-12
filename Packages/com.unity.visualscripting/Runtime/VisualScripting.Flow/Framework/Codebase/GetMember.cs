@@ -69,7 +69,7 @@ namespace Unity.VisualScripting
 
             cachedGet = strategy switch
             {
-                AccessStrategy.Static => flow => m.Get(ParameterValue.None),
+                AccessStrategy.Static => flow => m.Get(ParameterValue.Null),
                 AccessStrategy.Instance => flow => m.Get(flow.GetValueData(tPort)),
                 AccessStrategy.Reference => flow =>
                 {

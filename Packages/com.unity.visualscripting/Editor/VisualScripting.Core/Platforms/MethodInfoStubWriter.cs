@@ -133,7 +133,7 @@ namespace Unity.VisualScripting
 
             // Use default(T) for ParameterValue.Create to ensure correct AOT overload resolution
             CodeExpression pvTargetDefault = isStaticClass
-                ? (CodeExpression)new CodeFieldReferenceExpression(pvTypeExpression, "None")
+                ? (CodeExpression)new CodeFieldReferenceExpression(pvTypeExpression, "Null")
                 : new CodeDefaultValueExpression(targetType);
 
             // Ref and out parameters are not supported in the numbered argument signatures

@@ -1219,7 +1219,7 @@ namespace Unity.VisualScripting
                     Span<ParameterValue> argumentsWithThis = stackalloc ParameterValue[arguments.Length + 1];
                     argumentsWithThis[0] = target;
                     arguments.CopyTo(argumentsWithThis.Slice(1));
-                    return methodInvoker.Invoke(ParameterValue.None, argumentsWithThis);
+                    return methodInvoker.Invoke(ParameterValue.Null, argumentsWithThis);
                 }
 
                 return methodInvoker.Invoke(target, arguments);
@@ -1239,7 +1239,7 @@ namespace Unity.VisualScripting
                     Span<ParameterValue> argumentsWithThis = stackalloc ParameterValue[arguments.Length + 1];
                     argumentsWithThis[0] = target;
                     arguments.CopyTo(argumentsWithThis.Slice(1));
-                    return methodInvoker.Invoke(ParameterValue.None, argumentsWithThis);
+                    return methodInvoker.Invoke(ParameterValue.Null, argumentsWithThis);
                 }
 
                 return methodInvoker.InvokeRef(ref target, arguments);
@@ -1255,7 +1255,7 @@ namespace Unity.VisualScripting
                 throw new UnexpectedEnumValueException<Source>(source);
             }
 
-            return constructorInvoker.Invoke(ParameterValue.None, arguments);
+            return constructorInvoker.Invoke(ParameterValue.Null, arguments);
         }
 
         public ParameterValue Invoke(ParameterValue target)
@@ -1265,7 +1265,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target)
                     : methodInvoker.Invoke(target);
             }
 
@@ -1279,7 +1279,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target)
                     : methodInvoker.InvokeRef(ref target);
             }
 
@@ -1290,7 +1290,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return constructorInvoker.Invoke(ParameterValue.None);
+                return constructorInvoker.Invoke(ParameterValue.Null);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);
@@ -1303,7 +1303,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target, arg0)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target, arg0)
                     : methodInvoker.Invoke(target, arg0);
             }
 
@@ -1317,7 +1317,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target, arg0)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target, arg0)
                     : methodInvoker.InvokeRef(ref target, arg0);
             }
 
@@ -1328,7 +1328,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return constructorInvoker.Invoke(ParameterValue.None, arg0);
+                return constructorInvoker.Invoke(ParameterValue.Null, arg0);
             }
             throw new UnexpectedEnumValueException<Source>(source);
         }
@@ -1340,7 +1340,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target, arg0, arg1)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target, arg0, arg1)
                     : methodInvoker.Invoke(target, arg0, arg1);
             }
 
@@ -1354,7 +1354,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target, arg0, arg1)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target, arg0, arg1)
                     : methodInvoker.InvokeRef(ref target, arg0, arg1);
             }
 
@@ -1365,7 +1365,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return constructorInvoker.Invoke(ParameterValue.None, arg0, arg1);
+                return constructorInvoker.Invoke(ParameterValue.Null, arg0, arg1);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);
@@ -1378,7 +1378,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target, arg0, arg1, arg2)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target, arg0, arg1, arg2)
                     : methodInvoker.Invoke(target, arg0, arg1, arg2);
             }
 
@@ -1392,7 +1392,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target, arg0, arg1, arg2)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target, arg0, arg1, arg2)
                     : methodInvoker.InvokeRef(ref target, arg0, arg1, arg2);
             }
 
@@ -1403,7 +1403,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return constructorInvoker.Invoke(ParameterValue.None, arg0, arg1, arg2);
+                return constructorInvoker.Invoke(ParameterValue.Null, arg0, arg1, arg2);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);
@@ -1416,7 +1416,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target, arg0, arg1, arg2, arg3)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target, arg0, arg1, arg2, arg3)
                     : methodInvoker.Invoke(target, arg0, arg1, arg2, arg3);
             }
 
@@ -1430,7 +1430,7 @@ namespace Unity.VisualScripting
             if (source == Source.Method)
             {
                 return isInvokedAsExtension
-                    ? methodInvoker.Invoke(ParameterValue.None, target, arg0, arg1, arg2, arg3)
+                    ? methodInvoker.Invoke(ParameterValue.Null, target, arg0, arg1, arg2, arg3)
                     : methodInvoker.InvokeRef(ref target, arg0, arg1, arg2, arg3);
             }
 
@@ -1441,7 +1441,7 @@ namespace Unity.VisualScripting
         {
             if (source == Source.Constructor)
             {
-                return constructorInvoker.Invoke(ParameterValue.None, arg0, arg1, arg2, arg3);
+                return constructorInvoker.Invoke(ParameterValue.Null, arg0, arg1, arg2, arg3);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);
@@ -1482,12 +1482,12 @@ namespace Unity.VisualScripting
                 args[3] = arg2;
                 args[4] = arg3;
                 args[5] = arg4;
-                return methodInvoker.Invoke(ParameterValue.None, args);
+                return methodInvoker.Invoke(ParameterValue.Null, args);
             }
 
             if (source == Source.Constructor)
             {
-                return constructorInvoker.Invoke(ParameterValue.None, arg0, arg1, arg2, arg3, arg4);
+                return constructorInvoker.Invoke(ParameterValue.Null, arg0, arg1, arg2, arg3, arg4);
             }
 
             throw new UnexpectedEnumValueException<Source>(source);

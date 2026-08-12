@@ -8,13 +8,15 @@ namespace Unity.VisualScripting
     /// <summary>
     /// Invokes a method or a constructor via reflection.
     /// </summary>
-    public unsafe sealed class InvokeMember : MemberUnit
+    public sealed class InvokeMember : MemberUnit
     {
         public InvokeMember() : base() { }
 
         public InvokeMember(Member member) : base(member) { }
 
         private bool useExpandedParameters;
+
+        const int maxNumParameters = 5;
 
         /// <summary>
         /// Whether the target should be output to allow for chaining.
@@ -65,6 +67,8 @@ namespace Unity.VisualScripting
 
         [Serialize]
         internal List<string> parameterNames;
+
+        private delegate ParameterValue InvokeDelegate(ref ParameterValue target, Flow flow);
 
         public override bool HandleDependencies()
         {
@@ -187,7 +191,7 @@ namespace Unity.VisualScripting
                 }
             }
 
-            if (inputParameters.Length > 5)
+            if (inputParameters.Length > maxNumParameters)
             {
                 useExpandedParameters = false;
             }
@@ -332,13 +336,13 @@ namespace Unity.VisualScripting
             return member.isInvocable;
         }
 
-        private delegate* managed<InvokeMember, ref ParameterValue, Flow, ParameterValue> cachedInvoke;
+        private InvokeDelegate cachedInvoke;
 
         protected override void Initialize()
         {
             base.Initialize();
 
-            if (useExpandedParameters && parameterCount >= 0 && parameterCount <= 5)
+            if (useExpandedParameters && parameterCount >= 0 && parameterCount <= maxNumParameters)
             {
                 cachedInvoke = strategy == AccessStrategy.Reference
                     ? GetRefInvoker(parameterCount)
@@ -346,93 +350,89 @@ namespace Unity.VisualScripting
             }
             else
             {
-                cachedInvoke = &Invoke_Fallback;
+                cachedInvoke = Invoke_Fallback;
             }
         }
-        // Experiementing to see if this implementation is faster than normal delegates
-        #region Static Function Pointers
 
-        private static delegate*<InvokeMember, ref ParameterValue, Flow, ParameterValue> GetRefInvoker(int count)
+        private InvokeDelegate GetRefInvoker(int count)
         {
             return count switch
             {
-                0 => &InvokeRef_0,
-                1 => &InvokeRef_1,
-                2 => &InvokeRef_2,
-                3 => &InvokeRef_3,
-                4 => &InvokeRef_4,
-                5 => &InvokeRef_5,
-                _ => &Invoke_Fallback,
+                0 => InvokeRef_0,
+                1 => InvokeRef_1,
+                2 => InvokeRef_2,
+                3 => InvokeRef_3,
+                4 => InvokeRef_4,
+                maxNumParameters => InvokeRef_5,
+                _ => Invoke_Fallback,
             };
         }
 
-        private static delegate*<InvokeMember, ref ParameterValue, Flow, ParameterValue> GetValueInvoker(int count)
+        private InvokeDelegate GetValueInvoker(int count)
         {
             return count switch
             {
-                0 => &Invoke_0,
-                1 => &Invoke_1,
-                2 => &Invoke_2,
-                3 => &Invoke_3,
-                4 => &Invoke_4,
-                5 => &Invoke_5,
-                _ => &Invoke_Fallback,
+                0 => Invoke_0,
+                1 => Invoke_1,
+                2 => Invoke_2,
+                3 => Invoke_3,
+                4 => Invoke_4,
+                maxNumParameters => Invoke_5,
+                _ => Invoke_Fallback,
             };
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue InvokeRef_0(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.InvokeRef(ref t);
+        private ParameterValue InvokeRef_0(ref ParameterValue t, Flow f) =>
+            member.InvokeRef(ref t);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue InvokeRef_1(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.InvokeRef(ref t, f.GetValueData(@this.inputParameters[0]));
+        private ParameterValue InvokeRef_1(ref ParameterValue t, Flow f) =>
+            member.InvokeRef(ref t, f.GetValueData(inputParameters[0]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue InvokeRef_2(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.InvokeRef(ref t, f.GetValueData(@this.inputParameters[0]), f.GetValueData(@this.inputParameters[1]));
+        private ParameterValue InvokeRef_2(ref ParameterValue t, Flow f) =>
+            member.InvokeRef(ref t, f.GetValueData(inputParameters[0]), f.GetValueData(inputParameters[1]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue InvokeRef_3(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.InvokeRef(ref t, f.GetValueData(@this.inputParameters[0]), f.GetValueData(@this.inputParameters[1]), f.GetValueData(@this.inputParameters[2]));
+        private ParameterValue InvokeRef_3(ref ParameterValue t, Flow f) =>
+            member.InvokeRef(ref t, f.GetValueData(inputParameters[0]), f.GetValueData(inputParameters[1]), f.GetValueData(inputParameters[2]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue InvokeRef_4(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.InvokeRef(ref t, f.GetValueData(@this.inputParameters[0]), f.GetValueData(@this.inputParameters[1]), f.GetValueData(@this.inputParameters[2]), f.GetValueData(@this.inputParameters[3]));
+        private ParameterValue InvokeRef_4(ref ParameterValue t, Flow f) =>
+            member.InvokeRef(ref t, f.GetValueData(inputParameters[0]), f.GetValueData(inputParameters[1]), f.GetValueData(inputParameters[2]), f.GetValueData(inputParameters[3]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue InvokeRef_5(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.InvokeRef(ref t, f.GetValueData(@this.inputParameters[0]), f.GetValueData(@this.inputParameters[1]), f.GetValueData(@this.inputParameters[2]), f.GetValueData(@this.inputParameters[3]), f.GetValueData(@this.inputParameters[4]));
+        private ParameterValue InvokeRef_5(ref ParameterValue t, Flow f) =>
+            member.InvokeRef(ref t, f.GetValueData(inputParameters[0]), f.GetValueData(inputParameters[1]), f.GetValueData(inputParameters[2]), f.GetValueData(inputParameters[3]), f.GetValueData(inputParameters[4]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue Invoke_0(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.Invoke(t);
+        private ParameterValue Invoke_0(ref ParameterValue t, Flow f) =>
+            member.Invoke(t);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue Invoke_1(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.Invoke(t, f.GetValueData(@this.inputParameters[0]));
+        private ParameterValue Invoke_1(ref ParameterValue t, Flow f) =>
+            member.Invoke(t, f.GetValueData(inputParameters[0]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue Invoke_2(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.Invoke(t, f.GetValueData(@this.inputParameters[0]), f.GetValueData(@this.inputParameters[1]));
+        private ParameterValue Invoke_2(ref ParameterValue t, Flow f) =>
+            member.Invoke(t, f.GetValueData(inputParameters[0]), f.GetValueData(inputParameters[1]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue Invoke_3(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.Invoke(t, f.GetValueData(@this.inputParameters[0]), f.GetValueData(@this.inputParameters[1]), f.GetValueData(@this.inputParameters[2]));
+        private ParameterValue Invoke_3(ref ParameterValue t, Flow f) =>
+            member.Invoke(t, f.GetValueData(inputParameters[0]), f.GetValueData(inputParameters[1]), f.GetValueData(inputParameters[2]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue Invoke_4(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.Invoke(t, f.GetValueData(@this.inputParameters[0]), f.GetValueData(@this.inputParameters[1]), f.GetValueData(@this.inputParameters[2]), f.GetValueData(@this.inputParameters[3]));
+        private ParameterValue Invoke_4(ref ParameterValue t, Flow f) =>
+            member.Invoke(t, f.GetValueData(inputParameters[0]), f.GetValueData(inputParameters[1]), f.GetValueData(inputParameters[2]), f.GetValueData(inputParameters[3]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue Invoke_5(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.member.Invoke(t, f.GetValueData(@this.inputParameters[0]), f.GetValueData(@this.inputParameters[1]), f.GetValueData(@this.inputParameters[2]), f.GetValueData(@this.inputParameters[3]), f.GetValueData(@this.inputParameters[4]));
+        private ParameterValue Invoke_5(ref ParameterValue t, Flow f) =>
+            member.Invoke(t, f.GetValueData(inputParameters[0]), f.GetValueData(inputParameters[1]), f.GetValueData(inputParameters[2]), f.GetValueData(inputParameters[3]), f.GetValueData(inputParameters[4]));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static ParameterValue Invoke_Fallback(InvokeMember @this, ref ParameterValue t, Flow f) =>
-            @this.InvokeFallback(ref t, f);
-
-        #endregion
+        private ParameterValue Invoke_Fallback(ref ParameterValue t, Flow f) =>
+            InvokeFallback(ref t, f);
 
         private ParameterValue InvokeFallback(ref ParameterValue target, Flow flow)
         {
@@ -441,14 +441,14 @@ namespace Unity.VisualScripting
             for (int i = 0; i < parameterCount; i++)
             {
                 var input = inputParameters[i];
-                arguments[i] = (input != null) ? flow.GetValueData(input) : ParameterValue.None;
+                arguments[i] = (input != null) ? flow.GetValueData(input) : ParameterValue.Null;
             }
 
             ParameterValue res;
             switch (strategy)
             {
                 case AccessStrategy.Static:
-                    res = member.Invoke(ParameterValue.None, arguments);
+                    res = member.Invoke(ParameterValue.Null, arguments);
                     break;
 
                 case AccessStrategy.Instance:
@@ -462,7 +462,7 @@ namespace Unity.VisualScripting
                     break;
 
                 default:
-                    res = ParameterValue.None;
+                    res = ParameterValue.Null;
                     break;
             }
 
@@ -471,8 +471,7 @@ namespace Unity.VisualScripting
                 var output = outputParameters[i];
                 var arg = arguments[i];
 
-                if (arg.UsesObjectID) flow.TrackObjectID(arg.objectID);
-                if (output != null) flow.SetValue(output, in arg);
+                if (output != null) flow.SetValue(output, arg);
             }
 
             return res;
@@ -480,8 +479,8 @@ namespace Unity.VisualScripting
 
         private ControlOutput Enter(Flow flow)
         {
-            var target = requiresTarget ? flow.GetValueData(this.target) : ParameterValue.None;
-            var resultValue = cachedInvoke(this, ref target, flow);
+            var target = requiresTarget ? flow.GetValueData(this.target) : ParameterValue.Null;
+            var resultValue = cachedInvoke(ref target, flow);
 
             if (requiresTarget && chainable) flow.SetValue(targetOutput, target);
             if (result != null) flow.SetValue(result, resultValue);
@@ -491,8 +490,8 @@ namespace Unity.VisualScripting
 
         private ParameterValue Result(Flow flow)
         {
-            var target = requiresTarget ? flow.GetValueData(this.target) : ParameterValue.None;
-            var resultValue = cachedInvoke(this, ref target, flow);
+            var target = requiresTarget ? flow.GetValueData(this.target) : ParameterValue.Null;
+            var resultValue = cachedInvoke(ref target, flow);
 
             if (requiresTarget && chainable) flow.SetValue(targetOutput, target);
 
@@ -503,7 +502,6 @@ namespace Unity.VisualScripting
 
         public override AnalyticsIdentifier GetAnalyticsIdentifier()
         {
-            const int maxNumParameters = 5;
             var s = $"{member.targetType.FullName}.{member.name}";
 
             if (member.parameterTypes != null)

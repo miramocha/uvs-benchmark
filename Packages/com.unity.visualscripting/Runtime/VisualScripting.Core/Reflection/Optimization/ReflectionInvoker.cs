@@ -5,6 +5,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
+using Unity.Scripting.LifecycleManagement;
 
 namespace Unity.VisualScripting
 {
@@ -14,6 +15,7 @@ namespace Unity.VisualScripting
         private readonly DelegateCompatiblity delegateCompatible;
 
         private readonly ThreadLocal<object[]> threadArgs;
+        [NoAutoStaticsCleanup]
         private static readonly object[] EmptyObjects = new object[0];
 
         public ReflectionInvoker(MethodInfo methodInfo, DelegateCompatiblity delegateCompatible) : base(methodInfo)
@@ -28,7 +30,7 @@ namespace Unity.VisualScripting
             threadArgs = new ThreadLocal<object[]>(() => new object[parameterTypes.Length]);
         }
 
-        private Func<object, object[], object> invoker;
+        private Func<object, object[], ParameterValue> invoker;
 
         public override void Compile()
         {
@@ -43,10 +45,10 @@ namespace Unity.VisualScripting
                 List<ParameterExpression> tempVariables = new List<ParameterExpression>();
                 Expression[] callArgs = new Expression[paramsInfo.Length];
 
+                // 1. Unpack input arguments from object[] into strongly-typed local variables
                 for (int i = 0; i < paramsInfo.Length; i++)
                 {
                     Type paramType = paramsInfo[i].ParameterType;
-
                     Type elementType = paramType.IsByRef ? paramType.GetElementType() : paramType;
 
                     ParameterExpression tempVar = Expression.Variable(elementType, $"arg_{i}");
@@ -59,7 +61,6 @@ namespace Unity.VisualScripting
                 }
 
                 Expression castTarget = methodInfo.IsStatic ? null : Expression.Convert(targetExp, methodInfo.DeclaringType);
-
                 MethodCallExpression callExp = Expression.Call(castTarget, methodInfo, callArgs);
 
                 ParameterExpression resultVar = null;
@@ -70,9 +71,9 @@ namespace Unity.VisualScripting
                 }
                 else
                 {
-                    resultVar = Expression.Variable(typeof(object), "result");
+                    resultVar = Expression.Variable(methodInfo.ReturnType, "result");
                     tempVariables.Add(resultVar);
-                    blockExpressions.Add(Expression.Assign(resultVar, Expression.Convert(callExp, typeof(object))));
+                    blockExpressions.Add(Expression.Assign(resultVar, callExp));
                 }
 
                 for (int i = 0; i < paramsInfo.Length; i++)
@@ -84,11 +85,22 @@ namespace Unity.VisualScripting
                     }
                 }
 
-                blockExpressions.Add(resultVar != null ? resultVar : Expression.Constant(null, typeof(object)));
+                if (methodInfo.ReturnType == typeof(void))
+                {
+                    blockExpressions.Add(Expression.Constant(default(ParameterValue), typeof(ParameterValue)));
+                }
+                else
+                {
+                    MethodInfo createMethod = typeof(ParameterValue)
+                        .GetMethod(nameof(ParameterValue.Create), BindingFlags.Public | BindingFlags.Static)
+                        .MakeGenericMethod(methodInfo.ReturnType);
+
+                    blockExpressions.Add(Expression.Call(createMethod, resultVar));
+                }
 
                 BlockExpression body = Expression.Block(tempVariables, blockExpressions);
 
-                invoker = Expression.Lambda<Func<object, object[], object>>(body, targetExp, argsExp).Compile();
+                invoker = Expression.Lambda<Func<object, object[], ParameterValue>>(body, targetExp, argsExp).Compile();
             }
         }
 
@@ -205,7 +217,8 @@ namespace Unity.VisualScripting
         }
 
         /// <summary>
-        /// NOTE: ByRef parameters create ParameterValue's using object make sure to free their handles when finished
+        /// WARNING: Any <see cref="ParameterValue"/> that uses ObjectValue will be Untracked,
+        /// ensure you Free it once done using the value to avoid memory leaks.
         /// </summary>
         public override ParameterValue Invoke(ParameterValue target, Span<ParameterValue> args)
         {
@@ -218,16 +231,19 @@ namespace Unity.VisualScripting
 
                 object boxedTarget = ConvertTarget(target);
 
-                object result = invoker != null
+                ParameterValue result = (invoker != null)
                     ? invoker(boxedTarget, localArgs)
-                    : methodInfo.Invoke(boxedTarget, localArgs);
+                    : ParameterValue.FromObject(methodInfo.Invoke(boxedTarget, localArgs));
 
                 for (int i = 0; i < count; i++)
                 {
-                    args[i] = new ParameterValue(localArgs[i]);
+                    if (parameterTypes[i].IsByRef)
+                    {
+                        args[i] = ParameterValue.FromObject(localArgs[i]);
+                    }
                 }
 
-                return new ParameterValue(result);
+                return result;
             }
             finally
             {
@@ -244,11 +260,12 @@ namespace Unity.VisualScripting
         {
             object boxedTarget = ConvertTarget(target);
 
-            object result = invoker != null
-                ? invoker(boxedTarget, EmptyObjects)
-                : methodInfo.Invoke(boxedTarget, EmptyObjects);
+            if (invoker != null)
+            {
+                return invoker(boxedTarget, EmptyObjects);
+            }
 
-            return new ParameterValue(result);
+            return ParameterValue.FromObject(methodInfo.Invoke(boxedTarget, EmptyObjects));
         }
 
         public override ParameterValue Invoke(ParameterValue target, ParameterValue arg0)
@@ -259,11 +276,13 @@ namespace Unity.VisualScripting
                 localArgs[0] = ConvertArg(arg0, 0);
                 object boxedTarget = ConvertTarget(target);
 
-                object result = invoker != null
-                    ? invoker(boxedTarget, localArgs)
-                    : methodInfo.Invoke(boxedTarget, localArgs);
+                if (invoker != null)
+                {
+                    return invoker(boxedTarget, localArgs);
+                }
 
-                return new ParameterValue(result);
+                object result = methodInfo.Invoke(boxedTarget, localArgs);
+                return ParameterValue.FromObject(result);
             }
             finally
             {
@@ -280,11 +299,14 @@ namespace Unity.VisualScripting
                 localArgs[1] = ConvertArg(arg1, 1);
                 object boxedTarget = ConvertTarget(target);
 
-                object result = invoker != null
-                    ? invoker(boxedTarget, localArgs)
-                    : methodInfo.Invoke(boxedTarget, localArgs);
+                if (invoker != null)
+                {
+                    return invoker(boxedTarget, localArgs);
+                }
 
-                return new ParameterValue(result);
+                object result = methodInfo.Invoke(boxedTarget, localArgs);
+
+                return ParameterValue.FromObject(result);
             }
             finally
             {
@@ -303,11 +325,14 @@ namespace Unity.VisualScripting
 
                 object boxedTarget = ConvertTarget(target);
 
-                object result = invoker != null
-                    ? invoker(boxedTarget, localArgs)
-                    : methodInfo.Invoke(boxedTarget, localArgs);
+                if (invoker != null)
+                {
+                    return invoker(boxedTarget, localArgs);
+                }
 
-                return new ParameterValue(result);
+                object result = methodInfo.Invoke(boxedTarget, localArgs);
+
+                return ParameterValue.FromObject(result);
             }
             finally
             {
@@ -327,11 +352,14 @@ namespace Unity.VisualScripting
 
                 object boxedTarget = ConvertTarget(target);
 
-                object result = invoker != null
-                    ? invoker(boxedTarget, localArgs)
-                    : methodInfo.Invoke(boxedTarget, localArgs);
+                if (invoker != null)
+                {
+                    return invoker(boxedTarget, localArgs);
+                }
 
-                return new ParameterValue(result);
+                object result = methodInfo.Invoke(boxedTarget, localArgs);
+
+                return ParameterValue.FromObject(result);
             }
             finally
             {
@@ -352,11 +380,14 @@ namespace Unity.VisualScripting
 
                 object boxedTarget = ConvertTarget(target);
 
-                object result = invoker != null
-                    ? invoker(boxedTarget, localArgs)
-                    : methodInfo.Invoke(boxedTarget, localArgs);
+                if (invoker != null)
+                {
+                    return invoker(boxedTarget, localArgs);
+                }
 
-                return new ParameterValue(result);
+                object result = methodInfo.Invoke(boxedTarget, localArgs);
+
+                return ParameterValue.FromObject(result);
             }
             finally
             {

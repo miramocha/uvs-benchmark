@@ -84,7 +84,7 @@ namespace Unity.VisualScripting
         public abstract object Invoke(object target, params object[] args);
 
         /// <summary>
-        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.None"/>.
+        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.Null"/>.
         /// </summary>
         public abstract ParameterValue Invoke(ParameterValue target, Span<ParameterValue> args);
 
@@ -114,27 +114,27 @@ namespace Unity.VisualScripting
         public virtual object Invoke(object target, object arg0, object arg1, object arg2, object arg3, object arg4) => throw new TargetParameterCountException();
 
         /// <summary>
-        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.None"/>.
+        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.Null"/>.
         /// </summary>
         public virtual ParameterValue Invoke(ParameterValue target) => throw new TargetParameterCountException();
         /// <summary>
-        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.None"/>.
+        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.Null"/>.
         /// </summary>
         public virtual ParameterValue Invoke(ParameterValue target, ParameterValue arg0) => throw new TargetParameterCountException();
         /// <summary>
-        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.None"/>.
+        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.Null"/>.
         /// </summary>
         public virtual ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1) => throw new TargetParameterCountException();
         /// <summary>
-        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.None"/>.
+        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.Null"/>.
         /// </summary>
         public virtual ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2) => throw new TargetParameterCountException();
         /// <summary>
-        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.None"/>.
+        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.Null"/>.
         /// </summary>
         public virtual ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3) => throw new TargetParameterCountException();
         /// <summary>
-        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.None"/>.
+        /// Invokes the constructor with the provided arguments and returns the result as a ParameterValue. target is ignored for constructors and can be passed as <see cref="ParameterValue.Null"/>.
         /// </summary>
         public virtual ParameterValue Invoke(ParameterValue target, ParameterValue arg0, ParameterValue arg1, ParameterValue arg2, ParameterValue arg3, ParameterValue arg4) => throw new TargetParameterCountException();
 

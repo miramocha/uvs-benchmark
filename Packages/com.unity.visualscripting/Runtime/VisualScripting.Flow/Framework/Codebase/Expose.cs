@@ -139,7 +139,7 @@ namespace Unity.VisualScripting
 
         private ParameterValue GetValue(Flow flow, Member member)
         {
-            var target = member.requiresTarget ? flow.GetValueData(this.target) : ParameterValue.None;
+            var target = member.requiresTarget ? flow.GetValueData(this.target) : ParameterValue.Null;
 
             return member.Get(target);
         }

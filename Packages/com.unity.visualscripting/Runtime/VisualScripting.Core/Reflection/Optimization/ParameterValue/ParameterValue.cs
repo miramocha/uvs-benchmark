@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 
 namespace Unity.VisualScripting
@@ -9,11 +10,11 @@ namespace Unity.VisualScripting
     [StructLayout(LayoutKind.Explicit)]
     public readonly partial struct ParameterValue : IEquatable<ParameterValue>, IFormattable
     {
-        public static readonly ParameterValue None = default;
+        public static readonly ParameterValue Null = default;
 
         public enum ValueType : byte
         {
-            None = 0,
+            Null = 0,
             Byte, SByte, Short, UShort,
             Int, UInt, Long, ULong,
             Float, Double, Decimal,
@@ -155,7 +156,7 @@ namespace Unity.VisualScripting
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly bool IsNull()
         {
-            return type == ValueType.None || (UsesObjectID && (objectID < 0 || ObjectValue == null));
+            return type == ValueType.Null || (UsesObjectID && (objectID < 0 || ObjectValue == null));
         }
 
         #endregion
@@ -165,7 +166,8 @@ namespace Unity.VisualScripting
         [MethodImpl(MethodImplOptions.NoInlining)]
         private readonly T ThrowInvalidCast<T>() => throw new InvalidCastException($"Cannot convert {type} to {typeof(T).FullName}");
 
-        private readonly T CastObject<T>()
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public readonly T CastObject<T>()
         {
             var obj = ObjectValue;
 
@@ -835,6 +837,40 @@ namespace Unity.VisualScripting
             else handle = -1;
         }
 
+        public static ParameterValue FromObject(object value) => FromObject(value, out _);
+
+        public static ParameterValue FromObject(object value, out int handle)
+        {
+            handle = -1;
+            return value switch
+            {
+                null => default,
+                int i => new ParameterValue(i),
+                float f => new ParameterValue(f),
+                bool b => new ParameterValue(b),
+                Vector3 v3 => new ParameterValue(v3),
+                Vector2 v2 => new ParameterValue(v2),
+                string s => new ParameterValue(s, out handle),
+                double d => new ParameterValue(d),
+                long l => new ParameterValue(l),
+                uint ui => new ParameterValue(ui),
+                byte by => new ParameterValue(by),
+                short sh => new ParameterValue(sh),
+                ushort ush => new ParameterValue(ush),
+                ulong ul => new ParameterValue(ul),
+                sbyte sb => new ParameterValue(sb),
+                Vector4 v4 => new ParameterValue(v4),
+                Quaternion q => new ParameterValue(q),
+                Color c => new ParameterValue(c),
+                decimal d => new ParameterValue(d),
+                Vector2Int v2i => new ParameterValue(v2i),
+                Vector3Int v3i => new ParameterValue(v3i),
+                Rect r => new ParameterValue(r),
+                Ray2D r2d => new ParameterValue(r2d),
+                _ => new ParameterValue(value, out handle)
+            };
+        }
+
         public static implicit operator byte(in ParameterValue value) => value.ToByte();
         public static implicit operator sbyte(in ParameterValue value) => value.ToSByte();
         public static implicit operator short(in ParameterValue value) => value.ToInt16();
@@ -862,7 +898,7 @@ namespace Unity.VisualScripting
         public static implicit operator Rect(in ParameterValue value) => value.ToRect();
         public static implicit operator Ray2D(in ParameterValue value) => value.ToRay2D();
         #endregion
-
+        [NoAutoStaticsCleanup]
         private static readonly Dictionary<Type, ValueType> TypeToEnum = new Dictionary<Type, ValueType>
         {
             { typeof(byte), ValueType.Byte },
@@ -891,7 +927,7 @@ namespace Unity.VisualScripting
 
         public static ValueType GetParameterValueType(Type type)
         {
-            if (type == null) return ValueType.None;
+            if (type == null) return ValueType.Null;
 
             if (TypeToEnum.TryGetValue(type, out var valueType))
             {
@@ -901,6 +937,7 @@ namespace Unity.VisualScripting
             return ValueType.Object;
         }
 
+        [NoAutoStaticsCleanup]
         private static readonly Dictionary<ValueType, Type> EnumToType = new Dictionary<ValueType, Type>
         {
             { ValueType.Byte, typeof(byte) },
@@ -1025,7 +1062,7 @@ namespace Unity.VisualScripting
 
             switch (type)
             {
-                case ValueType.None:
+                case ValueType.Null:
                     break;
                 case ValueType.Bool:
                     hash.Add(boolValue);
@@ -1111,7 +1148,7 @@ namespace Unity.VisualScripting
         {
             return type switch
             {
-                ValueType.None => "null",
+                ValueType.Null => "null",
                 ValueType.Bool => boolValue.ToString(),
                 ValueType.Byte => byteValue.ToString(),
                 ValueType.SByte => sbyteValue.ToString(),
@@ -1149,7 +1186,7 @@ namespace Unity.VisualScripting
         {
             switch (type)
             {
-                case ValueType.None:
+                case ValueType.Null:
                     return "null";
                 case ValueType.Bool:
                     return boolValue.ToString();
@@ -1202,6 +1239,7 @@ namespace Unity.VisualScripting
             }
         }
 
+        [NoAutoStaticsCleanup]
         public static class TypeTraits<T>
         {
             public static readonly Type Type;

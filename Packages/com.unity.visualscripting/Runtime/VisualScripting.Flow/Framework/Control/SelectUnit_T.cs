@@ -37,7 +37,7 @@ namespace Unity.VisualScripting
 
         protected override void Definition()
         {
-            selection = ValueOutput(nameof(selection), Result).Predictable();
+            selection = ValueOutput(typeof(T), nameof(selection), Result).Predictable();
 
             selector = ValueInput<T>(nameof(selector));
 
@@ -67,7 +67,7 @@ namespace Unity.VisualScripting
             return a.Equals(b);
         }
 
-        public object Result(Flow flow)
+        public ParameterValue Result(Flow flow)
         {
             var selector = flow.GetValue<T>(this.selector);
 
@@ -75,11 +75,11 @@ namespace Unity.VisualScripting
             {
                 if (Matches(branch.Key, selector))
                 {
-                    return flow.GetValue(branch.Value);
+                    return flow.GetValueData(branch.Value);
                 }
             }
 
-            return flow.GetValue(@default);
+            return flow.GetValueData(@default);
         }
     }
 }

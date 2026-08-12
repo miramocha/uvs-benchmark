@@ -383,7 +383,7 @@ namespace Unity.VisualScripting
                     }
                     return objectValue.IsConvertibleTo(type, true);
 
-                case ValueType.None:
+                case ValueType.Null:
                     return IsNullable(type);
 
                 default:
@@ -403,7 +403,6 @@ namespace Unity.VisualScripting
                 return (type >= ValueType.Byte && type <= ValueType.Decimal) || (type == ValueType.Object && (ObjectValue?.IsConvertibleTo<T>(true) ?? false));
             }
 
-            // Updated Vector/Math block
             if (TypeTraits<T>.IsVector3 || TypeTraits<T>.IsVector2 || TypeTraits<T>.IsVector4 ||
                 TypeTraits<T>.IsVector2Int || TypeTraits<T>.IsVector3Int || TypeTraits<T>.IsRect || TypeTraits<T>.IsRay2D)
             {
@@ -676,7 +675,7 @@ namespace Unity.VisualScripting
 
         public readonly Type GetValueType() => type switch
         {
-            ValueType.None => null,
+            ValueType.Null => null,
             ValueType.Byte => Types.Byte,
             ValueType.SByte => Types.SByte,
             ValueType.Short => Types.Short,

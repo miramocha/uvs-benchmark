@@ -32,30 +32,33 @@ namespace Unity.VisualScripting
         {
             input = ValueInput<object>(nameof(input)).AllowsNull();
             fallback = ValueInput<object>(nameof(fallback));
-            result = ValueOutput(nameof(result), Coalesce).Predictable();
+            result = ValueOutput(typeof(object), nameof(result), Coalesce).Predictable();
 
             Requirement(input, result);
             Requirement(fallback, result);
         }
 
-        public object Coalesce(Flow flow)
+        public ParameterValue Coalesce(Flow flow)
         {
-            var input = flow.GetValue(this.input);
+            var input = flow.GetValueData(this.input);
 
-            bool isNull;
+            bool isNull = input.type == ParameterValue.ValueType.Null;
 
-            if (input is UnityObject)
+            if (input.UsesObjectID) // Cannot be null if UsesObjectID is false unless type == None
             {
-                // Required cast because of Unity's custom == operator.
-                // ReSharper disable once ConditionIsAlwaysTrueOrFalse
-                isNull = (UnityObject)input == null;
-            }
-            else
-            {
-                isNull = input == null;
+                if (input.ObjectValue is UnityObject @object)
+                {
+                    // Required cast because of Unity's custom == operator.
+                    // ReSharper disable once ConditionIsAlwaysTrueOrFalse
+                    isNull = @object == null;
+                }
+                else
+                {
+                    isNull = input.IsNull();
+                }
             }
 
-            return isNull ? flow.GetValue(fallback) : input;
+            return isNull ? flow.GetValueData(fallback) : input;
         }
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 using UnityObject = UnityEngine.Object;
 
@@ -148,6 +149,7 @@ namespace Unity.VisualScripting
             return this;
         }
 
+        [NoAutoStaticsCleanup]
         private static readonly HashSet<Type> typesWithDefaultValues = new HashSet<Type>()
         {
             typeof(Vector2),

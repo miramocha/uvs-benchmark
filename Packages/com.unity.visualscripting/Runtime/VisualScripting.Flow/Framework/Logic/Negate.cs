@@ -24,14 +24,14 @@ namespace Unity.VisualScripting
         protected override void Definition()
         {
             input = ValueInput<bool>(nameof(input));
-            output = ValueOutput(nameof(output), Operation).Predictable();
+            output = ValueOutput(typeof(bool), nameof(output), Operation).Predictable();
 
             Requirement(input, output);
         }
 
-        public bool Operation(Flow flow)
+        public ParameterValue Operation(Flow flow)
         {
-            return !flow.GetValue<bool>(input);
+            return new ParameterValue(!flow.GetValueData(input).ToBool());
         }
     }
 }

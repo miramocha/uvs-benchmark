@@ -356,11 +356,81 @@ namespace Unity.VisualScripting
         {
             return ValueOutput(typeof(T), key);
         }
+        
+        // These are to avoid the ParameterValue.Create slow path if possible
+        #region Specialized ValueOutput Overloads
+        protected ValueOutput ValueOutput(string key, Func<Flow, byte> getValue)
+            => ValueOutput(typeof(byte), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, sbyte> getValue)
+            => ValueOutput(typeof(sbyte), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, short> getValue)
+            => ValueOutput(typeof(short), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, ushort> getValue)
+            => ValueOutput(typeof(ushort), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, int> getValue)
+            => ValueOutput(typeof(int), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, uint> getValue)
+            => ValueOutput(typeof(uint), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, long> getValue)
+            => ValueOutput(typeof(long), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, ulong> getValue)
+            => ValueOutput(typeof(ulong), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, float> getValue)
+            => ValueOutput(typeof(float), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, double> getValue)
+            => ValueOutput(typeof(double), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, decimal> getValue)
+            => ValueOutput(typeof(decimal), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, bool> getValue)
+            => ValueOutput(typeof(bool), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, Vector2> getValue)
+            => ValueOutput(typeof(Vector2), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, Vector3> getValue)
+            => ValueOutput(typeof(Vector3), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, Vector4> getValue)
+            => ValueOutput(typeof(Vector4), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, Vector2Int> getValue)
+            => ValueOutput(typeof(Vector2Int), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, Vector3Int> getValue)
+            => ValueOutput(typeof(Vector3Int), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, Quaternion> getValue)
+            => ValueOutput(typeof(Quaternion), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, Color> getValue)
+            => ValueOutput(typeof(Color), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, Rect> getValue)
+            => ValueOutput(typeof(Rect), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, Ray2D> getValue)
+            => ValueOutput(typeof(Ray2D), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, string> getValue)
+            => ValueOutput(typeof(string), key, flow => new ParameterValue(getValue(flow)));
+
+        protected ValueOutput ValueOutput(string key, Func<Flow, UnityEngine.Object> getValue)
+            => ValueOutput(typeof(UnityEngine.Object), key, flow => new ParameterValue(getValue(flow)));
+        #endregion
 
         protected ValueOutput ValueOutput<T>(string key, Func<Flow, T> getValue)
-        {
-            return ValueOutput(typeof(T), key, (flow) => ParameterValue.Create(getValue(flow)));
-        }
+            => ValueOutput(typeof(T), key, flow => ParameterValue.Create(getValue(flow)));
 
         private void Relation(IUnitPort source, IUnitPort destination)
         {

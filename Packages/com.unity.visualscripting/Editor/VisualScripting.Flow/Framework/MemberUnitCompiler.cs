@@ -12,6 +12,20 @@ namespace Unity.VisualScripting
 {
     public static class MemberUnitCompiler
     {
+        private readonly struct OperatorInfo
+        {
+            public OperatorInfo(string symbol, bool isUnary, bool isPrefix = true)
+            {
+                Symbol = symbol;
+                IsUnary = isUnary;
+                IsPrefix = isPrefix;
+            }
+
+            public readonly string Symbol;
+            public readonly bool IsUnary;
+            public readonly bool IsPrefix;
+        }
+
         private const string compilePath = "Assets/Unity.VisualScripting.Generated/VisualScripting.Flow/Generated Units";
 
         private const string BatchQueueKey = "VS_AutoReplace_BatchQueue";
@@ -40,31 +54,21 @@ namespace Unity.VisualScripting
             string targetTypeName = member.targetType.Name;
             string memberName = member.name;
             string className = unit.compiledClassName;
-            string unitTitle = "";
+            string unitTitle = member.info.SelectedName(BoltCore.Configuration.humanNaming);
 
             ActionDirection actionDirection;
 
             if (unit is GetMember)
             {
                 actionDirection = ActionDirection.Get;
-                unitTitle = member.ToString() + " (Get)";
             }
             else if (unit is SetMember)
             {
                 actionDirection = ActionDirection.Set;
-                unitTitle = member.ToString() + " (Set)";
             }
             else
             {
                 actionDirection = ActionDirection.Any;
-                if (member.isConstructor)
-                {
-                    unitTitle = $"New {member.targetType.Name}";
-                }
-                else
-                {
-                    unitTitle = member.ToString();
-                }
             }
 
             string safeMemberName = member.isConstructor ? "Constructor" : memberName.Replace(".", string.Empty);
@@ -94,13 +98,16 @@ namespace Unity.VisualScripting
             sb.AppendLine($"        public override Type PseudoDeclaringType {{ get; protected set; }} = typeof({GetTypeCSharpString(member.pseudoDeclaringType)});");
             sb.AppendLine();
 
+            // CSharpName: List<float> or new List<float>
             sb.AppendLine("        [Preserve]");
             sb.AppendLine($"        public override string CSharpName {{ get; protected set; }} = \"{(member.isConstructor ? "new" : (member.isOperator || member.isConversion) ? member.info.CSharpName(actionDirection) : memberName)}\";");
 
+            // HumanName: List of float or Create List of float
             sb.AppendLine("        [Preserve]");
             sb.AppendLine($"        public override string HumanName {{ get; protected set; }} = \"{(member.isConstructor ? "new" : (member.isOperator || member.isConversion) ? member.info.HumanName(actionDirection) : memberName)}\";");
             sb.AppendLine();
 
+            // ActualName: List`1 or ctor
             sb.AppendLine("        [Preserve]");
             sb.AppendLine($"        public override string ActualName {{ get; protected set; }} = \"{memberName}\";");
             sb.AppendLine();
@@ -323,6 +330,11 @@ namespace Unity.VisualScripting
                     sb.AppendLine("            Requirement(target, enter);");
                 }
 
+                if (member.type != typeof(void))
+                {
+                    sb.AppendLine($"            result = ValueOutput(typeof({GetTypeCSharpString(member.type)}), nameof(result), Get{safeMemberName});");
+                }
+
                 var parameters = member.GetParameterInfos().ToArray();
                 foreach (var p in parameters)
                 {
@@ -343,11 +355,6 @@ namespace Unity.VisualScripting
                     {
                         sb.AppendLine($"            {p.Name}Output = ValueOutput<{pTypeStr}>($\"&{p.Name}\");");
                     }
-                }
-
-                if (member.type != typeof(void))
-                {
-                    sb.AppendLine($"            result = ValueOutput(typeof({GetTypeCSharpString(member.type)}), nameof(result), Get{safeMemberName});");
                 }
 
                 sb.AppendLine();
@@ -513,13 +520,18 @@ namespace Unity.VisualScripting
                 }
                 else if (member.isOperator)
                 {
-                    string opSymbol = GetOperatorSymbol(member.name);
-                    if (parameters.Length == 2)
-                        methodInvocation = $"var value = {argNames[0]} {opSymbol} {argNames[1]};";
-                    else if (parameters.Length == 1)
-                        methodInvocation = $"var value = {opSymbol}{argNames[0]};";
+                    var op = GetOperatorInfo(member.name);
+
+                    if (op.IsUnary)
+                    {
+                        methodInvocation = op.IsPrefix
+                            ? $"var value = {op.Symbol}{argNames[0]};"
+                            : $"var value = {argNames[0]}{op.Symbol};";
+                    }
                     else
-                        methodInvocation = $"var value = {invocationTarget}.{memberName}({argumentsStr});"; // Fallback
+                    {
+                        methodInvocation = $"var value = {argNames[0]} {op.Symbol} {argNames[1]};";
+                    }
                 }
                 else
                 {
@@ -739,21 +751,21 @@ namespace Unity.VisualScripting
         {
             if (IsValidParameterValueFieldType(type))
                 return $".GetValueData({Port}).{GetExplicitConversionMethod(type)}";
-            return $".GetValue<{GetTypeCSharpString(type)}>({Port})";
+            return $".GetValueObject<{GetTypeCSharpString(type)}>({Port})";
         }
 
         private static string GetConversionString(Type type)
         {
             if (IsValidParameterValueFieldType(type))
                 return $".{GetExplicitConversionMethod(type)}";
-            return $".Cast<{GetTypeCSharpString(type)}>()";
+            return $".CastObject<{GetTypeCSharpString(type)}>()";
         }
 
         private static bool IsValidParameterValueFieldType(Type type)
         {
             var valueType = ParameterValue.GetParameterValueType(type);
 
-            if (valueType != ParameterValue.ValueType.None && valueType != ParameterValue.ValueType.Object)
+            if (valueType != ParameterValue.ValueType.Null && valueType != ParameterValue.ValueType.Object)
                 return true;
             return false;
         }
@@ -798,39 +810,42 @@ namespace Unity.VisualScripting
             throw new ArgumentException($"Unsupported explicit conversion type: {type?.FullName}");
         }
 
-        private static string GetOperatorSymbol(string methodName)
+        private static OperatorInfo GetOperatorInfo(string methodName)
         {
             switch (methodName)
             {
-                case "op_Addition": return "+";
-                case "op_Subtraction": return "-";
-                case "op_Multiply": return "*";
-                case "op_Division": return "/";
-                case "op_Modulus": return "%";
-                case "op_ExclusiveOr": return "^";
-                case "op_BitwiseAnd": return "&";
-                case "op_BitwiseOr": return "|";
-                case "op_LogicalAnd": return "&&";
-                case "op_LogicalOr": return "||";
-                case "op_Assign": return "=";
-                case "op_LeftShift": return "<<";
-                case "op_RightShift": return ">>";
-                case "op_Equality": return "==";
-                case "op_GreaterThan": return ">";
-                case "op_LessThan": return "<";
-                case "op_Inequality": return "!=";
-                case "op_GreaterThanOrEqual": return ">=";
-                case "op_LessThanOrEqual": return "<=";
-                case "op_UnaryNegation": return "-";
-                case "op_UnaryPlus": return "+";
-                case "op_LogicalNot": return "!";
-                case "op_OnesComplement": return "~";
-                case "op_Increment": return "++";
-                case "op_Decrement": return "--";
-                default: return methodName;
+                case "op_Addition": return new OperatorInfo("+", false);
+                case "op_Subtraction": return new OperatorInfo("-", false);
+                case "op_Multiply": return new OperatorInfo("*", false);
+                case "op_Division": return new OperatorInfo("/", false);
+                case "op_Modulus": return new OperatorInfo("%", false);
+                case "op_ExclusiveOr": return new OperatorInfo("^", false);
+                case "op_BitwiseAnd": return new OperatorInfo("&", false);
+                case "op_BitwiseOr": return new OperatorInfo("|", false);
+                case "op_LogicalAnd": return new OperatorInfo("&&", false);
+                case "op_LogicalOr": return new OperatorInfo("||", false);
+                case "op_Assign": return new OperatorInfo("=", false);
+                case "op_LeftShift": return new OperatorInfo("<<", false);
+                case "op_RightShift": return new OperatorInfo(">>", false);
+                case "op_Equality": return new OperatorInfo("==", false);
+                case "op_Inequality": return new OperatorInfo("!=", false);
+                case "op_GreaterThan": return new OperatorInfo(">", false);
+                case "op_GreaterThanOrEqual": return new OperatorInfo(">=", false);
+                case "op_LessThan": return new OperatorInfo("<", false);
+                case "op_LessThanOrEqual": return new OperatorInfo("<=", false);
+
+                case "op_UnaryPlus": return new OperatorInfo("+", true);
+                case "op_UnaryNegation": return new OperatorInfo("-", true);
+                case "op_LogicalNot": return new OperatorInfo("!", true);
+                case "op_OnesComplement": return new OperatorInfo("~", true);
+
+                case "op_Increment": return new OperatorInfo("++", true, true);
+                case "op_Decrement": return new OperatorInfo("--", true, true);
+
+                default:
+                    throw new NotSupportedException(methodName);
             }
         }
-
         [DidReloadScripts]
         private static void OnScriptsCompiled()
         {

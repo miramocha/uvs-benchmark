@@ -135,12 +135,13 @@ namespace Unity.VisualScripting
 
             flow.SetValue(currentKey, keyItem);
             flow.SetValue(currentItem, valueItem);
+            ref var indexValue = ref flow.GetValueRefOrAddForPort(currentIndex, out _);
 
             while (flow.LoopIsNotBroken(loop) && dictEnum.MoveNext())
             {
                 keyItem.UpdateObject(dictEnum.Key);
                 valueItem.UpdateObject(dictEnum.Value);
-                flow.SetValue(currentIndex, index);
+                indexValue = new ParameterValue(index);
 
                 flow.Invoke(body);
                 flow.RestoreStack(stack);
@@ -158,13 +159,16 @@ namespace Unity.VisualScripting
 
             flow.SetValue(currentKey, keyItem);
             flow.SetValue(currentItem, valueItem);
+
+            ref var indexValue = ref flow.GetValueRefOrAddForPort(currentIndex, out _);
+
             foreach (DictionaryEntry item in dict)
             {
                 if (!flow.LoopIsNotBroken(loop)) break;
 
                 keyItem.UpdateObject(item.Key);
                 valueItem.UpdateObject(item.Value);
-                flow.SetValue(currentIndex, index);
+                indexValue = new ParameterValue(index);
 
                 flow.Invoke(body);
                 flow.RestoreStack(stack);
@@ -172,7 +176,7 @@ namespace Unity.VisualScripting
                 index++;
             }
         }
-
+        
         private void LoopList(Flow flow, int loop, GraphStack stack, IList list)
         {
             int count = list.Count;
@@ -180,12 +184,14 @@ namespace Unity.VisualScripting
             var item = new ParameterValue(list.Count > 0 ? list[0] : null);
             flow.SetValue(currentItem, item);
 
+            ref var indexValue = ref flow.GetValueRefOrAddForPort(currentIndex, out _);
+
             for (int index = 0; index < count; index++)
             {
                 if (!flow.LoopIsNotBroken(loop)) break;
 
                 item.UpdateObject(list[index]);
-                flow.SetValue(currentIndex, index);
+                indexValue = new ParameterValue(index);
 
                 flow.Invoke(body);
                 flow.RestoreStack(stack);
@@ -199,12 +205,14 @@ namespace Unity.VisualScripting
             var item = new ParameterValue(list.Count > 0 ? list[0] : null);
             flow.SetValue(currentItem, item);
 
+            ref var indexValue = ref flow.GetValueRefOrAddForPort(currentIndex, out _);
+
             for (int index = 0; index < count; index++)
             {
                 if (!flow.LoopIsNotBroken(loop)) break;
 
                 item.UpdateObject(list[index]);
-                flow.SetValue(currentIndex, index);
+                indexValue = new ParameterValue(index);
 
                 flow.Invoke(body);
                 flow.RestoreStack(stack);
@@ -218,10 +226,12 @@ namespace Unity.VisualScripting
             var item = new ParameterValue((object)null);
             flow.SetValue(currentItem, item);
 
+            ref var indexValue = ref flow.GetValueRefOrAddForPort(currentIndex, out _);
+
             while (flow.LoopIsNotBroken(loop) && enumerator.MoveNext())
             {
                 item.UpdateObject(enumerator.Current);
-                flow.SetValue(currentIndex, index);
+                indexValue = new ParameterValue(index);
 
                 flow.Invoke(body);
                 flow.RestoreStack(stack);

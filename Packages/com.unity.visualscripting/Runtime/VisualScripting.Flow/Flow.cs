@@ -1,10 +1,10 @@
-#pragma warning disable UAC0009 // DEVELOPMENT_BUILD usage
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using Unity.Scripting.LifecycleManagement;
 using UnityEngine;
 using UnityEngine.Profiling;
 
@@ -106,20 +106,20 @@ namespace Unity.VisualScripting
             {
                 var entries = _entries;
                 int m = _mask;
-                uint hash = key.Hash;
 
-                int index = (int)(hash >> _shift) & m;
+                int index = (int)(key.Hash >> _shift);
 
-                ref readonly Entry entry = ref entries[index];
-
-                while (entry.Key != null)
+                while (true)
                 {
+                    ref readonly Entry entry = ref entries[index];
+
+                    if (entry.Key is null) break;
+
                     if (ReferenceEquals(entry.Key, key))
                     {
                         return true;
                     }
                     index = (index + 1) & m;
-                    entry = ref entries[index];
                 }
 
                 return false;
@@ -129,20 +129,21 @@ namespace Unity.VisualScripting
             {
                 var entries = _entries;
                 int m = _mask;
-                uint hash = key.Hash;
-                int index = (int)(hash >> _shift) & m;
 
-                ref readonly Entry entry = ref entries[index];
+                int index = (int)(key.Hash >> _shift);
 
-                while (entry.Key != null)
+                while (true)
                 {
+                    ref readonly Entry entry = ref entries[index];
+
+                    if (entry.Key is null) break;
+
                     if (ReferenceEquals(entry.Key, key))
                     {
                         value = entry.Value;
                         return true;
                     }
                     index = (index + 1) & m;
-                    entry = ref entries[index];
                 }
 
                 value = default;
@@ -153,29 +154,41 @@ namespace Unity.VisualScripting
             {
                 var entries = _entries;
                 int m = _mask;
+
                 uint hash = key.Hash;
-                int i = (int)(hash >> _shift) & m;
+                int i = (int)(hash >> _shift);
 
-                ref Entry entry = ref entries[i];
-
-                while (entry.Key != null)
+                while (true)
                 {
+                    ref Entry entry = ref entries[i];
+
+                    if (entry.Key is null) break;
+
                     if (ReferenceEquals(entry.Key, key))
                     {
                         exists = true;
                         return ref entry.Value;
                     }
+
                     i = (i + 1) & m;
-                    entry = ref entries[i];
                 }
+
+                exists = false;
+                return ref Add(key, i, hash);
+            }
+
+            [MethodImpl(MethodImplOptions.NoInlining)]
+            private ref ParameterValue Add(IUnitValuePort key, int i, uint hash)
+            {
+                var entries = _entries;
 
                 if (_count >= _resizeAmount)
                 {
                     Resize();
                     entries = _entries;
-                    m = _mask;
+                    int m = _mask;
 
-                    i = (int)(hash >> _shift) & m;
+                    i = (int)(hash >> _shift);
 
                     while (entries[i].Key != null)
                     {
@@ -185,7 +198,6 @@ namespace Unity.VisualScripting
 
                 key.CacheValue();
 
-                exists = false;
                 _count++;
 
                 ref Entry newEntry = ref entries[i];
@@ -269,6 +281,7 @@ namespace Unity.VisualScripting
 
         public bool isPrediction { get; private set; }
 
+        [NoAutoStaticsCleanup]
         public static FlowDebuggingMode debuggingMode;
 
         private bool disposed;
@@ -319,6 +332,7 @@ namespace Unity.VisualScripting
 
         private Flow() { }
 
+        [NoAutoStaticsCleanup]
         private static readonly Func<Flow> flowFactory = static () => new Flow();
 
         public static Flow New(GraphReference reference)
@@ -356,6 +370,8 @@ namespace Unity.VisualScripting
             {
                 throw new ObjectDisposedException(ToString());
             }
+
+            disposed = true;
 
             GenericPool<Flow>.Free(this);
         }
@@ -398,8 +414,6 @@ namespace Unity.VisualScripting
             activeCoroutinesRegistry = null;
             coroutineStopRequested = false;
             isPrediction = false;
-
-            disposed = true;
         }
 
         public GraphStack PreserveStack()
@@ -815,6 +829,7 @@ namespace Unity.VisualScripting
             recursion?.Exit(recursionNode);
         }
 
+        [NoAutoStaticsCleanup]
         private static readonly FieldInfo StackTraceField = typeof(Exception).GetField("_stackTraceString", BindingFlags.Instance | BindingFlags.NonPublic);
 
         private const string VisualScriptingStackTraceHeader = "\n---VisualScripting Nodes Trace---\n";
@@ -864,6 +879,17 @@ namespace Unity.VisualScripting
             return locals.Contains(port);
         }
 
+        /// <summary>
+        /// Gets a reference to the ParameterValue for the port if it exists, 
+        /// if not it will add one to the locals dictionary similar to the SetValue methods and return a ref to that slot.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref ParameterValue GetValueRefOrAddForPort(IUnitValuePort port, out bool exists)
+        {
+            return ref locals.GetValueRefOrAdd(port, out exists);
+        }
+
+        #region Value Type Overloads
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, byte value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -873,38 +899,21 @@ namespace Unity.VisualScripting
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, ushort value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetValue(IUnitValuePort port, int value) => locals.Set(port, new ParameterValue(value));
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, uint value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, long value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, ulong value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetValue(IUnitValuePort port, int value)
-        {
-            ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
-            existing = new ParameterValue(value);
-        }
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, float value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, double value) => locals.Set(port, new ParameterValue(value));
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetValue(IUnitValuePort port, string value)
-        {
-            ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
-
-            if (exists && existing.UsesObjectID)
-            {
-                existing.UpdateObject(value);
-                existing.SetTypeUnsafe(ParameterValue.ValueType.String);
-                return;
-            }
-
-            var parameterValue = new ParameterValue(value, out int handle);
-            usedIDs.Add(handle);
-            existing = parameterValue;
-        }
+        public void SetValue(IUnitValuePort port, decimal value) => locals.Set(port, new ParameterValue(value));
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetValue(IUnitValuePort port, bool value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, Vector2 value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -912,16 +921,39 @@ namespace Unity.VisualScripting
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, Vector4 value) => locals.Set(port, new ParameterValue(value));
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetValue(IUnitValuePort port, Vector2Int value) => locals.Set(port, new ParameterValue(value));
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetValue(IUnitValuePort port, Vector3Int value) => locals.Set(port, new ParameterValue(value));
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, Quaternion value) => locals.Set(port, new ParameterValue(value));
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetValue(IUnitValuePort port, Color value) => locals.Set(port, new ParameterValue(value));
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetValue(IUnitValuePort port, Rect value) => locals.Set(port, new ParameterValue(value));
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetValue(IUnitValuePort port, Ray2D value) => locals.Set(port, new ParameterValue(value));
+        #endregion
 
+        #region Managed Reference Overloads
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetValue(IUnitValuePort port, string value)
+            => SetObjectValueInternal(port, value, ParameterValue.ValueType.String);
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SetValue(IUnitValuePort port, UnityEngine.Object value)
+            => SetObjectValueInternal(port, value, ParameterValue.ValueType.Object);
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, object value)
+            => SetObjectValueInternal(port, value, ParameterValue.ValueType.Object);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void SetObjectValueInternal(IUnitValuePort port, object value, ParameterValue.ValueType type)
         {
             ref var existing = ref locals.GetValueRefOrAdd(port, out bool exists);
+
             if (exists && existing.UsesObjectID)
             {
                 existing.UpdateObject(value);
-                existing.SetTypeUnsafe(ParameterValue.ValueType.Object);
+                existing.SetTypeUnsafe(type);
                 return;
             }
 
@@ -929,7 +961,7 @@ namespace Unity.VisualScripting
             usedIDs.Add(handle);
             existing = parameterValue;
         }
-
+        #endregion
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetValue(IUnitValuePort port, in ParameterValue value)
         {
@@ -950,8 +982,9 @@ namespace Unity.VisualScripting
             existing = value;
         }
 
-        // Track a object ID of a ParameterValue which will be free when the Flow is disposed.
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        /// <summary>
+        /// Track a object ID of a ParameterValue which will be free when the Flow is disposed.
+        /// </summary>
         public void TrackObjectID(int id)
         {
             usedIDs.Add(id);
@@ -1045,8 +1078,6 @@ namespace Unity.VisualScripting
                 return defaultValue;
             }
 
-            if (input.allowsNull) return default;
-
             return ThrowMissingValueInputPortException(input.key);
         }
 
@@ -1082,6 +1113,12 @@ namespace Unity.VisualScripting
         public T GetValue<T>(ValueInput input)
         {
             return GetValueData(input).Cast<T>();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T GetValueObject<T>(ValueInput input)
+        {
+            return GetValueData(input).CastObject<T>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1121,12 +1158,12 @@ namespace Unity.VisualScripting
         {
             if (!input.unit.defaultValues.TryGetValue(input.key, out var _defaultValue))
             {
-                defaultValue = ParameterValue.None;
+                defaultValue = ParameterValue.Null;
                 return false;
             }
             else
             {
-                defaultValue = CreateDefaultValue(_defaultValue, out int id);
+                defaultValue = ParameterValue.FromObject(_defaultValue, out int id);
                 if (id != -1)
                     usedIDs.Add(id);
             }
@@ -1137,32 +1174,6 @@ namespace Unity.VisualScripting
             }
 
             return true;
-        }
-
-        private ParameterValue CreateDefaultValue(object rawValue, out int id)
-        {
-            id = -1;
-            return rawValue switch
-            {
-                int i => new ParameterValue(i),
-                float f => new ParameterValue(f),
-                bool b => new ParameterValue(b),
-                double d => new ParameterValue(d),
-                long l => new ParameterValue(l),
-                uint ui => new ParameterValue(ui),
-                byte by => new ParameterValue(by),
-                short sh => new ParameterValue(sh),
-                ushort ush => new ParameterValue(ush),
-                ulong ul => new ParameterValue(ul),
-                sbyte sb => new ParameterValue(sb),
-                Vector3 v3 => new ParameterValue(v3),
-                Vector2 v2 => new ParameterValue(v2),
-                Vector4 v4 => new ParameterValue(v4),
-                Quaternion q => new ParameterValue(q),
-                Color c => new ParameterValue(c),
-                string s => new ParameterValue(s, out id),
-                _ => new ParameterValue(rawValue, out id)
-            };
         }
 
         #endregion
@@ -1374,4 +1385,3 @@ namespace Unity.VisualScripting
         #endregion
     }
 }
-#pragma warning restore UAC0009 // DEVELOPMENT_BUILD usage

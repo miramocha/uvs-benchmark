@@ -95,7 +95,7 @@ namespace Unity.VisualScripting
 
         private ControlOutput Assign(Flow flow)
         {
-            var target = requiresTarget ? flow.GetValueData(this.target) : ParameterValue.None;
+            var target = requiresTarget ? flow.GetValueData(this.target) : ParameterValue.Null;
 
             switch (strategy)
             {

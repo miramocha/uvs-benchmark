@@ -291,7 +291,6 @@ namespace Unity.VisualScripting
                 return Unsafe.As<Quaternion, T>(ref val);
             }
 
-            // New types
             if (typeof(T) == typeof(Vector2Int))
             {
                 Vector2Int val = ToVector2Int();
@@ -337,7 +336,7 @@ namespace Unity.VisualScripting
                     return ConversionUtility.HasNumericConversion(typeof(float), type) || ConversionUtility.CanConvert(typeof(float), type, true);
                 case ValueType.Double:
                     return ConversionUtility.HasNumericConversion(typeof(double), type) || ConversionUtility.CanConvert(typeof(double), type, true);
-                case ValueType.Decimal: // Added
+                case ValueType.Decimal:
                     return ConversionUtility.HasNumericConversion(typeof(decimal), type) || ConversionUtility.CanConvert(typeof(decimal), type, true);
                 case ValueType.Byte:
                     return ConversionUtility.HasNumericConversion(typeof(byte), type) || ConversionUtility.CanConvert(typeof(byte), type, true);
@@ -380,7 +379,7 @@ namespace Unity.VisualScripting
                     if (objectValue == null) return IsNullable(type);
                     return objectValue.IsConvertibleTo(type, true);
 
-                case ValueType.None:
+                case ValueType.Null:
                     return IsNullable(type);
 
                 default:
@@ -689,7 +688,7 @@ namespace Unity.VisualScripting
 
         public readonly Type GetValueType() => type switch
         {
-            ValueType.None => null,
+            ValueType.Null => null,
             ValueType.Byte => typeof(byte),
             ValueType.SByte => typeof(sbyte),
             ValueType.Short => typeof(short),

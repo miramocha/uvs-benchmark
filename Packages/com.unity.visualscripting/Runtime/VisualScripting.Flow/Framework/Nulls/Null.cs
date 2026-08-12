@@ -14,7 +14,7 @@ namespace Unity.VisualScripting
 
         protected override void Definition()
         {
-            @null = ValueOutput<object>(nameof(@null), (recursion) => null).Predictable();
+            @null = ValueOutput(typeof(object), nameof(@null), (recursion) => default).Predictable();
         }
     }
 }

@@ -66,13 +66,15 @@ namespace Unity.VisualScripting
             var loop = flow.EnterLoop();
             var stack = flow.PreserveStack();
 
+            ref var indexValue = ref flow.GetValueRefOrAddForPort(currentIndex, out _);
+
             try
             {
                 for (int current = first; ascending ? current < last : current > last; current += stepVal)
                 {
                     if (!flow.LoopIsNotBroken(loop)) break;
 
-                    flow.SetValue(currentIndex, current);
+                    indexValue = new ParameterValue(current);
 
                     flow.Invoke(body);
                     flow.RestoreStack(stack);
@@ -101,8 +103,9 @@ namespace Unity.VisualScripting
                 yield break;
             }
 
-            var first = flow.GetValue<int>(firstIndex);
-            var last = flow.GetValue<int>(lastIndex);
+            var first = flow.GetValueData(firstIndex).ToInt32();
+            var last = flow.GetValueData(lastIndex).ToInt32();
+
             var ascending = first <= last;
 
             var loop = flow.EnterLoop();

@@ -1178,9 +1178,6 @@ namespace Unity.VisualScripting
             {
                 newUnit = new InvokeMember(member);
             }
-
-            newUnit.HandleDependencies();
-
             unit.CopyTo(newUnit);
             graph.units.Add(newUnit);
             newUnit.Define();
