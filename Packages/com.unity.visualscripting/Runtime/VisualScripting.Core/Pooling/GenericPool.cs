@@ -1,67 +1,98 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace Unity.VisualScripting
 {
     public static class GenericPool<T> where T : class, IPoolable
     {
-        private static readonly ConcurrentStack<T> free = new ConcurrentStack<T>();
+        private static readonly Stack<T> free = new Stack<T>();
+
+        private static readonly object @lock = new object();
 
         public static T New(Func<T> constructor)
         {
-            if (!free.TryPop(out T item))
+            lock (@lock)
             {
-                item = constructor();
-            }
+                T item;
+                if (free.Count == 0)
+                {
+                    item = constructor();
+                }
+                else
+                {
+                    item = free.Pop();
+                }
 
-            item.New();
-            return item;
+                item.New();
+
+                return item;
+            }
         }
 
         public static void Free(T item)
         {
-            item.Free();
-            free.Push(item);
+            lock (@lock)
+            {
+                item.Free();
+
+                free.Push(item);
+            }
         }
     }
 
     public static class GraphStackPool
     {
-        private static readonly ConcurrentStack<GraphStack> _free = new ConcurrentStack<GraphStack>();
+        private static readonly object @lock = new object();
+        private static readonly Stack<GraphStack> _free = new Stack<GraphStack>();
 
         public static GraphStack New(IGraphRoot root, List<IGraphParentElement> parentElements, Func<GraphStack> constructor)
         {
-            if (!_free.TryPop(out GraphStack instance))
+            lock (@lock)
             {
-                instance = constructor();
-            }
+                GraphStack instance;
+                if (_free.Count > 0)
+                {
+                    instance = _free.Pop();
+                }
+                else
+                {
+                    instance = constructor();
+                }
 
-            instance.InitializeNoAlloc(root, parentElements, true);
-            return instance;
+                instance.InitializeNoAlloc(root, parentElements, true);
+
+                return instance;
+            }
         }
 
         public static GraphStack New(GraphPointer source, Func<GraphStack> constructor)
         {
-            if (!_free.TryPop(out GraphStack instance))
+            lock (@lock)
             {
-                instance = constructor();
-            }
+                GraphStack instance;
+                if (_free.Count > 0)
+                {
+                    instance = _free.Pop();
+                }
+                else
+                {
+                    instance = constructor();
+                }
 
-            instance.CopyFrom(source, true);
-            return instance;
+                instance.CopyFrom(source, true);
+
+                return instance;
+            }
         }
 
         public static void Free(GraphStack stack)
         {
             if (stack == null) return;
-            
-            if (stack is IPoolable poolable)
+            lock (@lock)
             {
-                poolable.Free();
+                (stack as IPoolable).Free();
+                _free.Push(stack);
             }
-            
-            _free.Push(stack);
         }
     }
 }
